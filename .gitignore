@@ -1,0 +1,12 @@
+# Track only the plugin development projects and repository instructions.
+/*
+!/.gitignore
+!/README.md
+!/HomeWidgets/
+!/MyCalendar/
+
+# Dependencies, generated bundles and local recovery data.
+**/node_modules/
+**/build/
+/HomeWidgets/recovery/
+**/*.log

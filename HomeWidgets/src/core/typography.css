@@ -1,0 +1,62 @@
+/* Home-only defaults. The layout's typography settings override the variables. */
+.hw-home[data-home-widgets][data-theme] {
+  --hw-font-family: "Noto Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --hw-body-size: 15px;
+  --hw-line-height: 1.75;
+  --hw-secondary-size: max(12px, calc(var(--hw-body-size) - 1px));
+  --hw-meta-size: max(10px, calc(var(--hw-body-size) - 4px));
+  font-family: var(--hw-font-family);
+  font-size: var(--hw-body-size);
+  font-weight: 400;
+  line-height: var(--hw-line-height);
+  letter-spacing: normal;
+}
+.hw-home[data-home-widgets][data-theme] :is(
+  h1, h2, h3, h4, h5, h6, button, input, textarea, select,
+  .hw-countdown-number, .hw-countdown-number span, .hw-summary b
+) { font-family: var(--hw-font-family); }
+.hw-home[data-home-widgets][data-theme] .hw-widget-header h2 {
+  font-size: var(--hw-secondary-size);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.hw-home[data-home-widgets][data-theme] :is(
+  .hw-task, .hw-capture-input,
+  [data-widget-type="markdown"] .hw-widget-body,
+  [data-widget-type="tasks-query"] .hw-widget-body,
+  [data-widget-type="dataview"] table
+) { font-size: var(--hw-body-size); line-height: var(--hw-line-height); }
+.hw-home[data-home-widgets][data-theme] .hw-task small {
+  font-size: var(--hw-meta-size);
+  line-height: 1.6;
+}
+.hw-home[data-home-widgets][data-theme] :is(.hw-idea h3, .hw-shortcut strong) {
+  font-size: var(--hw-secondary-size);
+  font-weight: 500;
+}
+.hw-home[data-home-widgets][data-theme] :is(.hw-idea p, .hw-summary) {
+  font-size: var(--hw-secondary-size);
+  line-height: var(--hw-line-height);
+}
+.hw-home[data-home-widgets][data-theme] .hw-idea-meta { font-size: var(--hw-meta-size); }
+.hw-home[data-home-widgets][data-theme] .hw-shortcut small {
+  font-size: max(11px, calc(var(--hw-body-size) - 3px));
+  line-height: 1.6;
+}
+.hw-home[data-home-widgets][data-theme] .hw-form-body > label {
+  font-size: max(12px, calc(var(--hw-body-size) - 2px));
+}
+.hw-home[data-home-widgets][data-theme] .hw-dialog :is(input:not([type=checkbox]), textarea, select) {
+  font-size: var(--hw-body-size);
+}
+@media (max-width: 600px) {
+  .hw-home[data-home-widgets][data-theme] .hw-dialog :is(input:not([type=checkbox]), textarea, select) {
+    font-size: max(16px, var(--hw-body-size));
+  }
+}
+.hw-settings .hw-font-preview {
+  margin:0 20px 18px;padding:16px;border:1px solid var(--background-modifier-border);
+  border-radius:8px;background:var(--background-primary);color:var(--text-normal);
+  font-family:var(--hw-font-family, "Noto Sans SC", sans-serif);
+  font-size:var(--hw-body-size,15px);line-height:var(--hw-line-height,1.75);white-space:pre-line;overflow-wrap:anywhere;
+}

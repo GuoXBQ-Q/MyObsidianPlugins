@@ -1,0 +1,15 @@
+{
+  "name": "home-widgets",
+  "version": "0.1.1",
+  "private": true,
+  "description": "An independently configurable widget home for Obsidian",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "deploy": "node scripts/deploy.cjs",
+    "pretest": "node scripts/build.cjs",
+    "test": "node --test tests/core.test.cjs tests/plugin.test.cjs tests/tasks-widget.test.cjs tests/countdown-widget.test.cjs tests/layout-edit-session.test.cjs tests/capture-widget.test.cjs tests/capture-shortcut.test.cjs tests/persistent-events.test.cjs tests/activity.test.cjs tests/task-category-removal.test.cjs tests/banner-widget.test.cjs tests/storage-organization.test.cjs",
+    "preview": "node scripts/preview.cjs"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
