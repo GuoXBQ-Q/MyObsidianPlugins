@@ -8,6 +8,7 @@
 		"build": "node esbuild.config.mjs production",
 		"deploy": "node scripts/deploy.cjs",
 		"typecheck": "tsc -noEmit -skipLibCheck",
+		"test": "node --test tests/event-range.test.cjs",
 		"preview": "node tests/preview.cjs"
 	},
 	"devDependencies": {

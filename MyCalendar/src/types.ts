@@ -5,6 +5,8 @@ export interface CalendarEvent {
 	title: string;
 	/** 日期，格式 YYYY-MM-DD */
 	date: string;
+	/** 结束日期（含当天），省略表示单日 */
+	endDate?: string;
 	/** 开始时间 HH:mm，留空表示全天 */
 	startTime?: string;
 	/** 结束时间 HH:mm */

@@ -12,14 +12,29 @@ export function normalizeTime(value: string): string | null {
 
 /** Date and time panels float beside their respective controls. */
 export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'] = 'monday') {
+	const rangeToggle = container.createDiv('mc-field mc-check-row');
+	const rangeId = `mc-range-${ev.id}`;
+	const rangeCheck = rangeToggle.createEl('input', { type: 'checkbox', attr: { id: rangeId, 'aria-label': '跨天日程' } });
+	rangeCheck.checked = !!ev.endDate && ev.endDate > ev.date;
+	rangeToggle.createEl('label', { text: '跨天日程（包含结束当天）', attr: { for: rangeId } });
 	const row = container.createDiv('mc-row3');
 	const dateWrap = row.createDiv('mc-date-field');
+	const endDateWrap = row.createDiv('mc-end-date-field');
+	endDateWrap.hidden = !rangeCheck.checked;
+	row.classList.toggle('is-range', rangeCheck.checked);
 	const fields: { key: 'startTime' | 'endTime'; label: string; input: HTMLInputElement; button: HTMLButtonElement }[] = [];
 	const panel = container.createDiv('mc-time-panel');
 	let active: typeof fields[number] | null = null;
 	const popover = createPickerPopover(panel, () => { active = null; });
 	const closePanel = popover.close;
-	const dateControl = mountDatePicker(dateWrap, container, ev, weekStart, closePanel);
+	const dateControl = mountDatePicker(dateWrap, container, ev, weekStart, () => { closePanel(); endDateControl.close(); });
+	const endDateControl = mountDatePicker(endDateWrap, container, ev, weekStart, () => { closePanel(); dateControl.close(); }, 'endDate');
+	rangeCheck.addEventListener('change', () => {
+		dateControl.close(); endDateControl.close(); closePanel();
+		endDateWrap.hidden = !rangeCheck.checked; row.classList.toggle('is-range', rangeCheck.checked);
+		if (rangeCheck.checked) endDateControl.setValue(ev.endDate ?? dateControl.input.value);
+		else delete ev.endDate;
+	});
 	const commit = (field: typeof fields[number]): boolean => {
 		const raw = field.input.value.trim();
 		const time = raw ? normalizeTime(raw) : undefined;
@@ -37,6 +52,7 @@ export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekS
 	};
 	const openPanel = (field: typeof fields[number]) => {
 		dateControl.close();
+		endDateControl.close();
 		if (active === field) { closePanel(); return; }
 		closePanel();
 		active = field;
@@ -109,8 +125,13 @@ export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekS
 	panel.id = `mc-time-panel-${ev.id}`;
 	panel.setAttribute('role', 'group');
 	panel.setAttribute('aria-label', '时间选择');
-	return { dispose() { popover.dispose(); dateControl.dispose(); }, validate() {
+	return { dispose() { popover.dispose(); dateControl.dispose(); endDateControl.dispose(); }, validate() {
 		if (!dateControl.validate()) return false;
+		if (rangeCheck.checked) {
+			if (!endDateControl.validate()) return false;
+			if (ev.endDate! < ev.date) { new Notice('结束日期不能早于开始日期'); endDateControl.input.focus(); return false; }
+			if (ev.endDate === ev.date) delete ev.endDate;
+		} else delete ev.endDate;
 		for (const field of fields) {
 			if (!commit(field)) { new Notice('请输入有效时间，如 09:30（00:00–23:59）'); field.input.focus(); return false; }
 		}

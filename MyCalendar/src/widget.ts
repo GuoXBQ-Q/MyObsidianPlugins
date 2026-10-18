@@ -14,6 +14,7 @@ import {
 	weekdayLabels,
 } from './utils';
 import { MY_CALENDAR_WIDGET_CSS } from './widget-styles';
+import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
 
 /**
  * 注册到 Home Widgets 宿主的组件定义。
@@ -129,30 +130,14 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			root.append(head, weekdaysEl, grid);
 			context.el.append(root);
 
-			const eventsByDate = (): Map<string, CalendarEvent[]> => {
-				const map = new Map<string, CalendarEvent[]>();
-				for (const ev of plugin.events) {
-					let list = map.get(ev.date);
-					if (!list) {
-						list = [];
-						map.set(ev.date, list);
-					}
-					list.push(ev);
-				}
-				for (const list of map.values()) {
-					list.sort((a, b) => (a.startTime ?? '00:00').localeCompare(b.startTime ?? '00:00'));
-				}
-				return map;
-			};
-
 			const chipEl = (ev: CalendarEvent): HTMLElement => {
 				const color = colorOf(ev.color);
 				const chip = el(doc, 'div', 'mcw-chip');
-				chip.setAttribute('aria-label', `${ev.title}${ev.startTime ? ' · ' + ev.startTime : ''}${ev.note ? ' · ' + ev.note : ''}`);
+				chip.setAttribute('aria-label', eventDescription(ev));
 				chip.style.background = hexToRgba(color, 0.16);
 				chip.style.setProperty('--mcw-chip-color', color);
 				chip.append(el(doc, 'span', 'mcw-dot'));
-				if (ev.startTime) chip.append(el(doc, 'span', 'mcw-time', fmtTimeShort(ev.startTime)));
+				if (ev.startTime && !isMultiDay(ev)) chip.append(el(doc, 'span', 'mcw-time', fmtTimeShort(ev.startTime)));
 				chip.append(el(doc, 'span', 'mcw-name', ev.title));
 				if (ev.important) chip.append(el(doc, 'span', 'mcw-star', '★'));
 				chip.addEventListener('click', (e) => {
@@ -172,11 +157,13 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					...weekdayLabels(plugin.settings.weekStart).map((label) => el(doc, 'div', 'mcw-weekday', label))
 				);
 
-				const map = eventsByDate();
 				const today = todayKey();
 				const first = new Date(cursor.y, cursor.m - 1, 1);
 				const weekStartIdx = plugin.settings.weekStart === 'monday' ? 1 : 0;
 				const gridStart = addDays(first, -(first.getDay() - weekStartIdx + 7) % 7);
+				const map = indexEvents(plugin.events, gridStart, 42);
+				const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(plugin.events, addDays(gridStart, i * 7)));
+				const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
 
 				grid.replaceChildren();
 				for (let i = 0; i < 42; i++) {
@@ -186,6 +173,9 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					const important = evs.find((e) => e.important);
 
 					const cell = el(doc, 'div', 'mcw-cell');
+					const week = Math.floor(i / 7);
+					cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
+					cell.style.minHeight = `${50 + lanes[week] * 18}px`;
 					if (cellDate.getMonth() !== cursor.m - 1) cell.classList.add('mcw-other');
 					if (key === today) cell.classList.add('mcw-today');
 					if (evs.length) cell.classList.add('mcw-has-events');
@@ -213,9 +203,11 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					cell.append(top);
 
 					const chips = el(doc, 'div', 'mcw-chips');
-					for (const ev of evs.slice(0, 2)) chips.append(chipEl(ev));
-					if (evs.length > 2) {
-						const more = el(doc, 'div', 'mcw-chip mcw-more', `还有 ${evs.length - 2} 项…`);
+					chips.style.paddingTop = `${lanes[week] * 18}px`;
+					const singles = evs.filter(ev => !isMultiDay(ev));
+					for (const ev of singles.slice(0, 2)) chips.append(chipEl(ev));
+					if (singles.length > 2) {
+						const more = el(doc, 'div', 'mcw-chip mcw-more', `还有 ${singles.length - 2} 项…`);
 						more.addEventListener('click', (e) => {
 							e.stopPropagation();
 							if (inPreview) {
@@ -237,6 +229,12 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					});
 					grid.append(cell);
 				}
+				weeks.forEach((spans, week) => {
+					for (const span of spans) {
+						const bar = chipEl(span.ev); bar.classList.add('mcw-range-bar');
+						placeRangeBar(bar, span, week + 1, 24, 18); grid.append(bar);
+					}
+				});
 			};
 
 			prevBtn.addEventListener('click', () => {

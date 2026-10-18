@@ -4,6 +4,7 @@ import { CalendarEvent, ViewMode } from './types';
 import { EventModal } from './event-modal';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
+import { eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
 import {
 	addDays,
 	addMonths,
@@ -160,25 +161,8 @@ export class CalendarView extends ItemView {
 
 	// ------------- 数据 -------------
 
-	private eventsByDate(): Map<string, CalendarEvent[]> {
-		const map = new Map<string, CalendarEvent[]>();
-		for (const ev of this.plugin.events) {
-			let list = map.get(ev.date);
-			if (!list) {
-				list = [];
-				map.set(ev.date, list);
-			}
-			list.push(ev);
-		}
-		// 全天事件排在最前，其余按开始时间排序
-		for (const list of map.values()) {
-			list.sort((a, b) => {
-				const av = a.startTime ?? '00:00';
-				const bv = b.startTime ?? '00:00';
-				return av.localeCompare(bv) || a.title.localeCompare(b.title);
-			});
-		}
-		return map;
+	private eventsByDate(start: Date, count = 1): Map<string, CalendarEvent[]> {
+		return indexEvents(this.plugin.events, start, count);
 	}
 
 	private openAdd(dateKey: string, time?: string): void {
@@ -252,10 +236,10 @@ export class CalendarView extends ItemView {
 
 		const dot = chip.createSpan('mc-chip-dot');
 		dot.style.background = color;
-		chip.createSpan({ cls: 'mc-chip-time', text: ev.startTime ? fmtTimeShort(ev.startTime) : '全天' });
+		if (!isMultiDay(ev)) chip.createSpan({ cls: 'mc-chip-time', text: ev.startTime ? fmtTimeShort(ev.startTime) : '全天' });
 		chip.createSpan({ cls: 'mc-chip-title', text: ev.title });
 		if (ev.important) chip.createSpan({ cls: 'mc-chip-star', text: '★' });
-		chip.setAttribute('aria-label', `${ev.title}${ev.startTime ? ' · ' + ev.startTime : ''}${ev.note ? ' · ' + ev.note : ''}`);
+		chip.setAttribute('aria-label', eventDescription(ev));
 		chip.addEventListener('click', (e) => {
 			e.stopPropagation();
 			this.openEdit(ev);
@@ -268,19 +252,22 @@ export class CalendarView extends ItemView {
 	private renderMonth(container: HTMLElement): void {
 		const { y, m } = this.state;
 		const settings = this.plugin.settings;
-		const map = this.eventsByDate();
 		const today = todayKey();
 
 		const first = new Date(y, m - 1, 1);
 		const weekStartIdx = settings.weekStart === 'monday' ? 1 : 0;
 		const offset = (first.getDay() - weekStartIdx + 7) % 7;
 		const gridStart = addDays(first, -offset);
+		const map = this.eventsByDate(gridStart, 42);
+		const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(this.plugin.events, addDays(gridStart, i * 7)));
+		const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
 
 		const labels = weekdayLabels(settings.weekStart);
 		const wd = container.createDiv('mc-weekdays');
 		for (const label of labels) wd.createDiv('mc-weekday').setText(label);
 
 		const grid = container.createDiv('mc-month-grid');
+		grid.style.gridTemplateRows = lanes.map(count => `minmax(${96 + count * 22}px, 1fr)`).join(' ');
 		for (let i = 0; i < 42; i++) {
 			const cellDate = addDays(gridStart, i);
 			const key = fmtDate(cellDate);
@@ -289,6 +276,9 @@ export class CalendarView extends ItemView {
 			const important = evs.find((e) => e.important);
 
 			const cell = grid.createDiv('mc-cell');
+			const week = Math.floor(i / 7);
+			cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
+			cell.style.minHeight = `${96 + lanes[week] * 22}px`;
 			if (!inMonth) cell.addClass('mc-other-month');
 			if (key === today) cell.addClass('mc-today');
 			if (evs.length) cell.addClass('mc-has-events');
@@ -323,10 +313,12 @@ export class CalendarView extends ItemView {
 			});
 
 			const chips = cell.createDiv('mc-chips');
+			chips.style.paddingTop = `${lanes[week] * 22}px`;
+			const singles = evs.filter(ev => !isMultiDay(ev));
 			const maxChips = 3;
-			for (const ev of evs.slice(0, maxChips)) chips.append(this.chipEl(ev));
-			if (evs.length > maxChips) {
-				const more = chips.createDiv({ cls: 'mc-chip mc-more', text: `还有 ${evs.length - maxChips} 项…` });
+			for (const ev of singles.slice(0, maxChips)) chips.append(this.chipEl(ev));
+			if (singles.length > maxChips) {
+				const more = chips.createDiv({ cls: 'mc-chip mc-more', text: `还有 ${singles.length - maxChips} 项…` });
 				more.addEventListener('click', (e) => {
 					e.stopPropagation();
 					this.jumpTo(cellDate, 'day');
@@ -335,6 +327,12 @@ export class CalendarView extends ItemView {
 
 			cell.addEventListener('click', () => this.openAdd(key));
 		}
+		weeks.forEach((spans, week) => {
+			for (const span of spans) {
+				const bar = this.chipEl(span.ev); bar.addClass('mc-range-bar');
+				placeRangeBar(bar, span, week + 1, 30, 22); grid.append(bar);
+			}
+		});
 	}
 
 	// ================ 周 / 日视图共用时间轴 ================
@@ -342,14 +340,26 @@ export class CalendarView extends ItemView {
 	private buildAllDayRow(container: HTMLElement, days: Date[], map: Map<string, CalendarEvent[]>): void {
 		const today = todayKey();
 		const row = container.createDiv('mc-allday');
-		row.createDiv('mc-allday-label').setText('全天');
+		const label = row.createDiv('mc-allday-label');
+		label.createSpan({ text: '全天' });
+		label.createSpan({ text: '跨天' });
 		const cells = row.createDiv('mc-allday-days');
-		for (const day of days) {
+		cells.style.gridTemplateColumns = `repeat(${days.length}, minmax(0, 1fr))`;
+		const spans = rangeSegments(this.plugin.events, days[0], days.length);
+		const lanes = Math.max(0, ...spans.map(span => span.lane + 1));
+		for (const [index, day] of days.entries()) {
 			const key = fmtDate(day);
 			const cellEl = cells.createDiv('mc-allday-cell');
+			cellEl.style.gridRow = '1'; cellEl.style.gridColumn = String(index + 1);
+			cellEl.style.paddingTop = `${4 + lanes * 22}px`;
+			cellEl.style.minHeight = `${34 + lanes * 22}px`;
 			if (key === today) cellEl.addClass('mc-today');
-			for (const ev of (map.get(key) ?? []).filter((e) => !e.startTime)) cellEl.append(this.chipEl(ev));
+			for (const ev of (map.get(key) ?? []).filter((e) => !e.startTime && !isMultiDay(e))) cellEl.append(this.chipEl(ev));
 			cellEl.addEventListener('click', () => this.openAdd(key));
+		}
+		for (const span of spans) {
+			const bar = this.chipEl(span.ev); bar.addClass('mc-range-bar');
+			placeRangeBar(bar, span, 1, 4, 22); cells.append(bar);
 		}
 	}
 
@@ -377,7 +387,7 @@ export class CalendarView extends ItemView {
 			for (let h = sh; h < eh; h++) col.createDiv('mc-hour-line');
 
 			// 时间块
-			const timed = (map.get(key) ?? []).filter((e) => e.startTime);
+			const timed = (map.get(key) ?? []).filter((e) => e.startTime && !isMultiDay(e));
 			for (const item of assignLanes(timed)) {
 				const { ev, lane, total } = item;
 				const s = toMin(ev.startTime);
@@ -452,7 +462,7 @@ export class CalendarView extends ItemView {
 		const s = this.state;
 		const start = startOfWeek(new Date(s.y, s.m - 1, s.d), this.plugin.settings.weekStart);
 		const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-		const map = this.eventsByDate();
+		const map = this.eventsByDate(start, 7);
 
 		const head = container.createDiv('mc-week-head');
 		head.createDiv('mc-week-head-spacer');
@@ -468,7 +478,7 @@ export class CalendarView extends ItemView {
 		const s = this.state;
 		const day = new Date(s.y, s.m - 1, s.d);
 		const settings = this.plugin.settings;
-		const map = this.eventsByDate();
+		const map = this.eventsByDate(day);
 		const key = fmtDate(day);
 
 		const info = container.createDiv('mc-day-info');
@@ -539,18 +549,18 @@ export class CalendarView extends ItemView {
 
 			const color = colorOf(ev.color);
 			const item = scroll.createDiv('mc-agenda-item');
-			if (ev.date < today) item.addClass('mc-past');
+			if (eventEndDate(ev) < today) item.addClass('mc-past');
 			const dot = item.createSpan('mc-agenda-dot');
 			dot.style.background = color;
 			item.createSpan({
 				cls: 'mc-agenda-time',
-				text: ev.startTime ? `${fmtTimeShort(ev.startTime)}${ev.endTime ? ' – ' + fmtTimeShort(ev.endTime) : ''}` : '全天',
+				text: isMultiDay(ev) ? `${ev.date}${ev.startTime ? ' ' + ev.startTime : ''} 至 ${eventEndDate(ev)}${ev.endTime ? ' ' + ev.endTime : ''}` : ev.startTime ? `${fmtTimeShort(ev.startTime)}${ev.endTime ? ' – ' + fmtTimeShort(ev.endTime) : ''}` : '全天',
 			});
 			const title = item.createSpan({ cls: 'mc-agenda-title', text: ev.title });
 			title.style.setProperty('--mc-chip-color', color);
 			if (ev.important) item.createSpan({ cls: 'mc-chip-star', text: '★' });
 			if (ev.note) item.createSpan({ cls: 'mc-agenda-note', text: ev.note });
-			item.setAttribute('aria-label', ev.note ? `${ev.title} · ${ev.note}` : ev.title);
+			item.setAttribute('aria-label', eventDescription(ev));
 			item.addEventListener('click', () => this.openEdit(ev));
 		}
 	}

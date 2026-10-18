@@ -13,15 +13,16 @@ export function parsePickerDate(value: string): Date | null {
 }
 
 /** Shares the time picker's themed floating panel and controls. */
-export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'], beforeOpen: () => void) {
-	const id = `mc-date-${ev.id}`;
-	wrap.createEl('label', { text: '日期', attr: { for: id } });
+export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'], beforeOpen: () => void, key: 'date' | 'endDate' = 'date') {
+	const label = key === 'date' ? '日期' : '结束日期';
+	const id = `mc-${key}-${ev.id}`;
+	wrap.createEl('label', { text: label, attr: { for: id } });
 	const control = wrap.createDiv('mc-time-control mc-date-control');
-	const input = control.createEl('input', { type: 'text', placeholder: 'YYYY-MM-DD', attr: { id, 'aria-label': '日期', maxlength: '10', autocomplete: 'off' } });
-	input.value = ev.date;
-	const trigger = control.createEl('button', { cls: 'mc-time-trigger', attr: { type: 'button', 'aria-label': '选择日期', 'aria-expanded': 'false', 'aria-controls': `${id}-panel` } });
+	const input = control.createEl('input', { type: 'text', placeholder: 'YYYY-MM-DD', attr: { id, 'aria-label': label, maxlength: '10', autocomplete: 'off' } });
+	input.value = ev[key] ?? ev.date;
+	const trigger = control.createEl('button', { cls: 'mc-time-trigger', attr: { type: 'button', 'aria-label': `选择${label}`, 'aria-expanded': 'false', 'aria-controls': `${id}-panel` } });
 	setIcon(trigger, 'calendar-days');
-	const panel = container.createDiv({ cls: 'mc-time-panel mc-date-panel', attr: { id: `${id}-panel`, role: 'group', 'aria-label': '日期选择' } });
+	const panel = container.createDiv({ cls: 'mc-time-panel mc-date-panel', attr: { id: `${id}-panel`, role: 'group', 'aria-label': `${label}选择` } });
 	const popover = createPickerPopover(panel);
 	let visibleMonth = parsePickerDate(ev.date) ?? new Date();
 	visibleMonth.setDate(1);
@@ -30,7 +31,7 @@ export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: C
 		const value = input.value.trim();
 		const valid = !!parsePickerDate(value);
 		input.setAttribute('aria-invalid', String(!valid));
-		if (valid) { input.value = value; ev.date = value; }
+		if (valid) { input.value = value; ev[key] = value; }
 		return valid;
 	};
 	const choose = (value: string) => { input.value = value; commit(); close(); trigger.focus(); };
@@ -80,8 +81,8 @@ export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: C
 		if (event.key === 'ArrowDown') { event.preventDefault(); open(); }
 		if (event.key === 'Enter') { event.preventDefault(); commit(); close(); }
 	});
-	return { close, dispose: popover.dispose, validate() {
+	return { close, input, setValue(value: string) { input.value = value; input.setAttribute('aria-invalid', 'false'); }, dispose: popover.dispose, validate() {
 		if (commit()) return true;
-		new Notice('请输入有效日期，格式为 YYYY-MM-DD'); input.focus(); return false;
+		new Notice(`请输入有效${label}，格式为 YYYY-MM-DD`); input.focus(); return false;
 	} };
 }

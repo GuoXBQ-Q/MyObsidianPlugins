@@ -16,11 +16,15 @@ html{overflow:auto}body{display:block;position:static;contain:none;overflow:auto
 </style></head><body class="theme-light"><nav><button id="new">新建日程</button><button id="edit">重开已保存日程</button><button id="theme">切换深浅色</button><button id="narrow">切换窄屏</button><button id="tests">运行交互测试</button></nav><main id="stage"></main><div id="notice" role="status"></div><details open><summary>验证结果</summary><pre id="results">等待测试</pre><pre id="saved"></pre></details><script src="/preview.js"></script></body></html>`;
 (async () => {
 	const bundle = await esbuild.build({ entryPoints: [path.join(__dirname, 'modal-preview.ts')], bundle: true, write: false, format: 'iife', platform: 'browser', alias: { obsidian: path.join(__dirname, 'preview-obsidian.ts') } });
+	const calendarBundle = await esbuild.build({ entryPoints: [path.join(__dirname, 'calendar-preview.ts')], bundle: true, write: false, format: 'iife', platform: 'browser', alias: { obsidian: path.join(__dirname, 'preview-obsidian.ts') } });
+	const calendarHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MyCalendar 跨天日程预览</title><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/styles.css"><style>html{overflow:auto}body{display:block;position:static;contain:none;overflow:auto;height:auto;padding:16px;background:var(--background-primary)}nav{display:flex;gap:8px;flex-wrap:wrap}main{max-width:1200px;margin:16px auto}#calendar>.my-calendar-view{display:flex;flex-direction:column;height:900px}#widget{height:520px;padding:12px;border:1px solid var(--background-modifier-border);border-radius:12px}.narrow main{max-width:390px}#stage{max-width:620px;margin:auto}#stage .modal{position:static;width:100%;max-width:100%}.mc-modal{max-width:none}pre{white-space:pre-wrap}h2{font-size:18px}</style></head><body class="theme-light"><nav><button id="theme">切换深浅色</button><button id="narrow">切换窄屏</button><button id="range-tests">运行跨天验证</button><a href="/">弹窗验证</a></nav><main><h2>插件独立月历</h2><section id="calendar"></section><h2>首页日程组件</h2><section id="widget"></section><section id="stage"></section><div id="notice"></div><pre id="results">等待验证</pre></main><script src="/calendar-preview.js"></script></body></html>`;
 	const baseCss = asset('app.css');
 	const themeFile = path.resolve(root, '../.obsidian/themes/AnuPpuccin/theme.css');
 	const server = http.createServer((req, res) => {
 		const routes = {
 			'/': ['text/html; charset=utf-8', () => html],
+			'/calendar': ['text/html; charset=utf-8', () => calendarHtml],
+			'/calendar-preview.js': ['text/javascript; charset=utf-8', () => calendarBundle.outputFiles[0].text],
 			'/preview.js': ['text/javascript; charset=utf-8', () => bundle.outputFiles[0].text],
 			'/app.css': ['text/css', () => baseCss],
 			'/theme.css': ['text/css', () => fs.existsSync(themeFile) ? fs.readFileSync(themeFile) : ''],

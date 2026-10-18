@@ -92,6 +92,13 @@ export const MY_CALENDAR_WIDGET_CSS = `
 .mcw-cell:nth-child(7n) {
 	border-right: none;
 }
+.mcw-root .mcw-range-bar {
+	align-self: start; z-index: 2; min-width: 0; height: 16px; margin: 0 2px;
+	box-sizing: border-box; border-left: 2px solid var(--mcw-chip-color);
+}
+.mcw-range-bar.mc-range-before { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.mcw-range-bar.mc-range-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.mcw-top { flex-shrink: 0; }
 
 .mcw-cell:hover {
 	box-shadow: inset 0 0 0 1.5px var(--mcw-ring, var(--background-modifier-border));

@@ -105,7 +105,7 @@ export class EventModal extends Modal {
 			return;
 		}
 		if (!this.timeControl?.validate() || !this.colorControl?.validate()) return;
-		if (this.ev.startTime && this.ev.endTime && this.ev.endTime <= this.ev.startTime) {
+		if ((!this.ev.endDate || this.ev.endDate === this.ev.date) && this.ev.startTime && this.ev.endTime && this.ev.endTime <= this.ev.startTime) {
 			new Notice('结束时间需要晚于开始时间');
 			return;
 		}

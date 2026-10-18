@@ -18,6 +18,14 @@ proto.createEl = function (tag: string, info: any = {}) {
 };
 proto.createDiv = function (info: any) { return this.createEl('div', info); };
 proto.createSpan = function (info: any) { return this.createEl('span', info); };
+(window as any).createDiv = (info?: any) => (document.createElement('div') as any).createDiv(info);
+export class ItemView {
+	contentEl = document.createElement('div');
+	app: unknown;
+	navigation = true;
+	constructor(leaf: any) { this.app = leaf.app; this.contentEl.className = 'view-content'; }
+}
+export class WorkspaceLeaf {}
 export class Modal {
 	contentEl: HTMLElement;
 	modalEl: HTMLElement;
