@@ -23,6 +23,72 @@ void createMyCalendarWidget(plugin as any).mount({
 });
 document.getElementById('theme')!.addEventListener('click', () => { document.body.classList.toggle('theme-dark'); document.body.classList.toggle('theme-light'); });
 document.getElementById('narrow')!.addEventListener('click', () => document.body.classList.toggle('narrow'));
+for (const size of ['short', 'tall', 'auto']) document.getElementById(`height-${size}`)!.addEventListener('click', () => {
+	document.body.classList.toggle('short', size === 'short');
+	document.body.classList.toggle('tall', size === 'tall');
+});
+document.getElementById('height-tests')!.addEventListener('click', () => {
+	const host = document.getElementById('calendar')!, previousHeight = host.style.height;
+	const lines: string[] = [];
+	const assert = (value: unknown, message: string) => { if (!value) throw new Error(message); };
+	try {
+		for (const mode of ['month', 'week', 'day', 'agenda'] as const) {
+			view.jumpTo(new Date(2026, 10, 6), mode);
+			for (const height of [360, 820]) {
+				host.style.height = height + 'px';
+				const root = view.contentEl.getBoundingClientRect(), body = view.contentEl.querySelector('.mc-body')!.getBoundingClientRect();
+				assert(Math.abs(root.height - height) < 2, `${mode} fills panel at ${height}px`);
+				assert(body.bottom <= root.bottom + 1 && body.height > 0, `${mode} content fits panel`);
+				assert(view.contentEl.scrollHeight <= view.contentEl.clientHeight + 1, `${mode} root does not scroll`);
+			}
+		}
+		lines.push('✓ 月/周/日/日程视图随容器高度变化，顶部工具栏保持可见');
+		view.jumpTo(new Date(2026, 10, 6), 'month');
+		host.style.height = '540px';
+		const compactHeight = view.contentEl.querySelector('.mc-cell')!.getBoundingClientRect().height;
+		host.style.height = '820px';
+		assert(view.contentEl.querySelector('.mc-cell')!.getBoundingClientRect().height > compactHeight + 10, 'month cells expand without rerender');
+		host.style.height = '360px';
+		const grid = view.contentEl.querySelector<HTMLElement>('.mc-month-grid')!;
+		assert(grid.scrollHeight > grid.clientHeight, 'short calendar scrolls internally');
+		for (const chips of view.contentEl.querySelectorAll<HTMLElement>('.mc-chips')) assert(chips.scrollHeight <= chips.clientHeight + 1, 'visible event chips retain readable height');
+		lines.push('✓ 月历格子自动伸缩，较矮窗口内部滚动，已有日程保留可读高度');
+		lines.push('全部通过');
+	} catch (error) { lines.push('失败：' + (error as Error).message); }
+	finally { host.style.height = previousHeight; view.jumpTo(new Date(2026, 10, 6), 'month'); }
+	document.getElementById('results')!.textContent = lines.join('\n');
+});
+document.getElementById('alignment-tests')!.addEventListener('click', () => {
+	const host = document.getElementById('calendar')!, previousHeight = host.style.height, previousWidth = host.style.width;
+	const lines: string[] = [];
+	const assert = (value: unknown, message: string) => { if (!value) throw new Error(message); };
+	try {
+		for (const width of [400, 1100]) {
+			host.style.width = width + 'px'; host.style.height = '420px';
+			view.jumpTo(new Date(2026, 10, 6), 'week');
+			const heads = [...view.contentEl.querySelectorAll<HTMLElement>('.mc-week-head-cell')];
+			const allDay = [...view.contentEl.querySelectorAll<HTMLElement>('.mc-allday-cell')];
+			const columns = [...view.contentEl.querySelectorAll<HTMLElement>('.mc-day-col')];
+			const scroll = view.contentEl.querySelector<HTMLElement>('.mc-week-scroll')!;
+			for (const position of [0, 140]) {
+				scroll.scrollTop = position;
+				for (let i = 0; i < 7; i++) {
+					const h = heads[i].getBoundingClientRect(), a = allDay[i].getBoundingClientRect(), c = columns[i].getBoundingClientRect();
+					assert(Math.abs(h.left - c.left) <= 1 && Math.abs(h.width - c.width) <= 1, `header column ${i} aligned at ${width}px`);
+					assert(Math.abs(a.left - c.left) <= 1 && Math.abs(a.width - c.width) <= 1, `all-day column ${i} aligned at ${width}px`);
+				}
+				assert(Math.abs(heads[0].parentElement!.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientTop) <= 1, 'heading remains sticky');
+			}
+			const root = view.contentEl.getBoundingClientRect(), box = scroll.getBoundingClientRect();
+			assert(box.left - root.left >= 15 && root.right - box.right >= 15 && root.bottom - box.bottom >= 15, 'calendar retains edge spacing');
+		}
+		lines.push('✓ 400px / 1100px 周视图：日期表头、全天栏与时间网格逐列对齐');
+		lines.push('✓ 滚动后保持对齐与固定表头，四周边距保留');
+		lines.push('全部通过');
+	} catch (error) { lines.push('失败：' + (error as Error).message); }
+	finally { host.style.height = previousHeight; host.style.width = previousWidth; view.jumpTo(new Date(2026, 10, 6), 'week'); }
+	document.getElementById('results')!.textContent = lines.join('\n');
+});
 document.getElementById('range-tests')!.addEventListener('click', () => {
 	const lines: string[] = [];
 	const assert = (value: unknown, message: string) => { if (!value) throw new Error(message); };

@@ -14,7 +14,7 @@ export function parsePickerDate(value: string): Date | null {
 
 /** Shares the time picker's themed floating panel and controls. */
 export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'], beforeOpen: () => void, key: 'date' | 'endDate' = 'date') {
-	const label = key === 'date' ? '日期' : '结束日期';
+	const label = key === 'date' ? '开始日期' : '结束日期';
 	const id = `mc-${key}-${ev.id}`;
 	wrap.createEl('label', { text: label, attr: { for: id } });
 	const control = wrap.createDiv('mc-time-control mc-date-control');
@@ -31,7 +31,10 @@ export function mountDatePicker(wrap: HTMLElement, container: HTMLElement, ev: C
 		const value = input.value.trim();
 		const valid = !!parsePickerDate(value);
 		input.setAttribute('aria-invalid', String(!valid));
-		if (valid) { input.value = value; ev[key] = value; }
+		if (valid) {
+			input.value = value; ev[key] = value;
+			input.dispatchEvent(new input.ownerDocument.defaultView!.Event('change', { bubbles: true }));
+		}
 		return valid;
 	};
 	const choose = (value: string) => { input.value = value; commit(); close(); trigger.focus(); };

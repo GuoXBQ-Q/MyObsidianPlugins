@@ -41,6 +41,16 @@ export class Notice {
 	constructor(message: string) { document.getElementById('notice')!.textContent = message; }
 }
 export function setIcon(el: HTMLElement, name: string) {
+	const paths: Record<string, string> = {
+		moon: '<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>',
+		'arrow-right': '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+		'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+		info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
+	};
+	if (paths[name]) {
+		el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
+		return;
+	}
 	if (name === 'calendar-days') {
 		el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M8 15h1m6 0h1m-8 3h1"/></svg>';
 		return;

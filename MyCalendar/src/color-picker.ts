@@ -18,7 +18,7 @@ export function mountColorPicker(container: HTMLElement, ev: CalendarEvent, sett
 	row.setAttribute('aria-label', '预设分类颜色');
 	const swatches: { button: HTMLButtonElement; value: string }[] = [];
 	const addSwatch = (parent: HTMLElement, value: string, label: string) => {
-		const sw = parent.createEl('button', { cls: 'mc-swatch', text: '✓', attr: { type: 'button', 'aria-label': label, title: label } });
+		const sw = parent.createEl('button', { cls: 'mc-swatch', text: '✓', attr: { type: 'button', 'aria-label': label } });
 		sw.style.setProperty('--mc-swatch-color', colorOf(value));
 		sw.addEventListener('click', () => select(value));
 		swatches.push({ button: sw, value });
@@ -31,7 +31,7 @@ export function mountColorPicker(container: HTMLElement, ev: CalendarEvent, sett
 		for (const hex of recent) addSwatch(recentRow, hex, `自定义颜色 ${hex}`);
 	}
 	const tools = section.createDiv('mc-color-tools');
-	const paletteLabel = tools.createEl('label', { cls: 'mc-color-native', attr: { title: '打开色盘选择任意颜色' } });
+	const paletteLabel = tools.createEl('label', { cls: 'mc-color-native' });
 	const palette = paletteLabel.createEl('input', { type: 'color', attr: { 'aria-label': '色盘选色' } });
 	paletteLabel.createSpan({ text: '色盘' });
 	const hexInput = tools.createEl('input', { cls: 'mc-input mc-hex-input', type: 'text', attr: { 'aria-label': '自定义颜色色号', placeholder: '#RRGGBB', maxlength: '7', spellcheck: 'false', autocomplete: 'off' } });
@@ -74,7 +74,7 @@ export function mountColorPicker(container: HTMLElement, ev: CalendarEvent, sett
 	let pickController: AbortController | null = null;
 	if (!EyeDropper) {
 		eyedropper.disabled = true;
-		eyedropper.title = '当前环境不支持屏幕取色，可使用左侧色盘或输入色号';
+		eyedropper.setAttribute('aria-description', '当前环境不支持屏幕取色，可使用左侧色盘或输入色号');
 	}
 	eyedropper.addEventListener('click', async () => {
 		if (!EyeDropper) return;

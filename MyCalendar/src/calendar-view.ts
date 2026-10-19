@@ -266,7 +266,6 @@ export class CalendarView extends ItemView {
 		for (const label of labels) wd.createDiv('mc-weekday').setText(label);
 
 		const grid = container.createDiv('mc-month-grid');
-		grid.style.gridTemplateRows = lanes.map(count => `minmax(${96 + count * 22}px, 1fr)`).join(' ');
 		for (let i = 0; i < 42; i++) {
 			const cellDate = addDays(gridStart, i);
 			const key = fmtDate(cellDate);
@@ -277,7 +276,6 @@ export class CalendarView extends ItemView {
 			const cell = grid.createDiv('mc-cell');
 			const week = Math.floor(i / 7);
 			cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
-			cell.style.minHeight = `${96 + lanes[week] * 22}px`;
 			if (!inMonth) cell.addClass('mc-other-month');
 			if (key === today) cell.addClass('mc-today');
 			if (evs.length) cell.addClass('mc-has-events');
@@ -362,15 +360,17 @@ export class CalendarView extends ItemView {
 		}
 	}
 
-	private buildTimeGrid(container: HTMLElement, days: Date[], map: Map<string, CalendarEvent[]>): HTMLElement {
+	private buildTimeGrid(container: HTMLElement, days: Date[], map: Map<string, CalendarEvent[]>, buildHeader: (sticky: HTMLElement) => void): HTMLElement {
 		const sh = this.plugin.settings.dayStartHour;
 		const eh = this.plugin.settings.dayEndHour;
 		const span = Math.max(1, eh - sh);
 		const today = todayKey();
 
 		const scroll = container.createDiv('mc-week-scroll');
+		// One scrollport gives the headings, all-day row and timed columns identical widths.
+		buildHeader(scroll.createDiv('mc-time-sticky'));
 		const grid = scroll.createDiv('mc-week-grid');
-		grid.style.gridTemplateColumns = `48px repeat(${days.length}, 1fr)`;
+		grid.style.gridTemplateColumns = `48px repeat(${days.length}, minmax(0, 1fr))`;
 
 		const labels = grid.createDiv('mc-hour-labels');
 		for (let h = sh; h <= eh; h++) labels.createDiv('mc-hour-label').setText(`${pad2(h)}:00`);
@@ -463,12 +463,12 @@ export class CalendarView extends ItemView {
 		const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 		const map = this.eventsByDate(start, 7);
 
-		const head = container.createDiv('mc-week-head');
-		head.createDiv('mc-week-head-spacer');
-		for (const day of days) this.dayHeadCell(head, day, map);
-
-		this.buildAllDayRow(container, days, map);
-		this.buildTimeGrid(container, days, map);
+		this.buildTimeGrid(container, days, map, sticky => {
+			const head = sticky.createDiv('mc-week-head');
+			head.createDiv('mc-week-head-spacer');
+			for (const day of days) this.dayHeadCell(head, day, map);
+			this.buildAllDayRow(sticky, days, map);
+		});
 	}
 
 	// ================ 日视图 ================
@@ -495,8 +495,7 @@ export class CalendarView extends ItemView {
 			});
 		}
 
-		this.buildAllDayRow(container, [day], map);
-		this.buildTimeGrid(container, [day], map);
+		this.buildTimeGrid(container, [day], map, sticky => this.buildAllDayRow(sticky, [day], map));
 	}
 
 	// ================ 日程（列表） ================

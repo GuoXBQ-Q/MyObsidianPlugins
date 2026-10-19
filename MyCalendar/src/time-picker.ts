@@ -1,7 +1,7 @@
 import { Notice, setIcon } from 'obsidian';
 import { CalendarEvent, MyCalendarSettings } from './types';
 import { pad2 } from './utils';
-import { mountDatePicker } from './date-picker';
+import { mountDatePicker, parsePickerDate } from './date-picker';
 import { createPickerPopover } from './picker-popover';
 
 export function normalizeTime(value: string): string | null {
@@ -13,28 +13,53 @@ export function normalizeTime(value: string): string | null {
 /** Date and time panels float beside their respective controls. */
 export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'] = 'monday') {
 	const optionsEl = container.createDiv('mc-event-options');
-	const rangeToggle = optionsEl.createDiv('mc-check-row');
 	const rangeId = `mc-range-${ev.id}`;
+	const rangeToggle = optionsEl.createEl('label', { cls: 'mc-option-card', attr: { for: rangeId } });
 	const rangeCheck = rangeToggle.createEl('input', { type: 'checkbox', attr: { id: rangeId, 'aria-label': '跨天日程', 'aria-description': '包含结束当天' } });
 	rangeCheck.checked = !!ev.endDate && ev.endDate > ev.date;
-	rangeToggle.createEl('label', { cls: 'mc-check-label', text: '跨天日程', attr: { for: rangeId } });
+	const rangeIcon = rangeToggle.createSpan({ cls: 'mc-option-icon', attr: { 'aria-hidden': 'true' } });
+	setIcon(rangeIcon, 'moon');
+	rangeToggle.createSpan({ cls: 'mc-option-title', text: '跨天日程' });
 	const row = container.createDiv('mc-row3');
 	const dateWrap = row.createDiv('mc-date-field');
 	const endDateWrap = row.createDiv('mc-end-date-field');
+	const arrow = row.createSpan({ cls: 'mc-date-range-arrow', attr: { 'aria-hidden': 'true' } });
+	setIcon(arrow, 'arrow-right');
 	endDateWrap.hidden = !rangeCheck.checked;
 	row.classList.toggle('is-range', rangeCheck.checked);
-	const fields: { key: 'startTime' | 'endTime'; label: string; input: HTMLInputElement; button: HTMLButtonElement }[] = [];
+	const summary = container.createDiv({ cls: 'mc-range-summary', attr: { role: 'status', 'aria-live': 'polite' } });
+	const summaryIcon = summary.createSpan({ cls: 'mc-summary-icon', attr: { 'aria-hidden': 'true' } });
+	setIcon(summaryIcon, 'info');
+	const summaryText = summary.createSpan();
+	const fields: { key: 'startTime' | 'endTime'; label: string; input: HTMLInputElement; button: HTMLButtonElement; wrap: HTMLElement }[] = [];
 	const panel = container.createDiv('mc-time-panel');
 	let active: typeof fields[number] | null = null;
 	const popover = createPickerPopover(panel, () => { active = null; });
 	const closePanel = popover.close;
 	const dateControl = mountDatePicker(dateWrap, container, ev, weekStart, () => { closePanel(); endDateControl.close(); });
 	const endDateControl = mountDatePicker(endDateWrap, container, ev, weekStart, () => { closePanel(); dateControl.close(); }, 'endDate');
+	const updateSummary = () => {
+		arrow.hidden = summary.hidden = !rangeCheck.checked;
+		if (!rangeCheck.checked) return;
+		const startValue = dateControl.input.value.trim(), endValue = endDateControl.input.value.trim();
+		const start = parsePickerDate(startValue), end = parsePickerDate(endValue);
+		const valid = !!start && !!end && endValue >= startValue;
+		summary.classList.toggle('is-invalid', !valid);
+		if (!start || !end) summaryText.setText('请选择有效的开始日期和结束日期');
+		else if (!valid) summaryText.setText('结束日期不能早于开始日期');
+		else {
+			const count = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+			summaryText.setText(`已选择跨天日程：从 ${startValue} 至 ${endValue}（共 ${count} 天）`);
+		}
+	};
+	row.addEventListener('input', updateSummary);
+	row.addEventListener('change', updateSummary);
 	rangeCheck.addEventListener('change', () => {
 		dateControl.close(); endDateControl.close(); closePanel();
 		endDateWrap.hidden = !rangeCheck.checked; row.classList.toggle('is-range', rangeCheck.checked);
 		if (rangeCheck.checked) endDateControl.setValue(ev.endDate ?? dateControl.input.value);
 		else delete ev.endDate;
+		updateSummary();
 	});
 	const commit = (field: typeof fields[number]): boolean => {
 		const raw = field.input.value.trim();
@@ -104,16 +129,18 @@ export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekS
 		popover.open(field.input.parentElement!, field.button);
 		hourButtons[hour].focus({ preventScroll: true });
 	};
-	for (const [key, label, placeholder] of [['startTime', '开始', '全天'], ['endTime', '结束', '可选']] as const) {
+	for (const [key, label, placeholder] of [['startTime', '开始', '全天'], ['endTime', '结束', '全天']] as const) {
 		const wrap = row.createDiv('mc-time-field');
 		const id = `mc-${key}-${ev.id}`;
-		wrap.createEl('label', { text: label, attr: { for: id } });
+		wrap.createEl('label', { text: `${label}时间`, attr: { for: id } });
 		const control = wrap.createDiv('mc-time-control');
 		const input = control.createEl('input', { type: 'text', placeholder, attr: { id, inputmode: 'numeric', maxlength: '5', 'aria-label': `${label}时间`, autocomplete: 'off' } });
 		input.value = ev[key] ?? '';
 		const button = control.createEl('button', { cls: 'mc-time-trigger', attr: { type: 'button', 'aria-label': `选择${label}时间`, 'aria-expanded': 'false', 'aria-controls': `mc-time-panel-${ev.id}` } });
 		setIcon(button, 'clock-3');
-		const field = { key, label, input, button };
+		const chevron = button.createSpan({ cls: 'mc-time-chevron', attr: { 'aria-hidden': 'true' } });
+		setIcon(chevron, 'chevron-down');
+		const field = { key, label, input, button, wrap };
 		fields.push(field);
 		button.addEventListener('click', () => openPanel(field));
 		input.addEventListener('input', () => { closePanel(); input.setAttribute('aria-invalid', 'false'); });
@@ -123,6 +150,9 @@ export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekS
 			if (e.key === 'Enter') { e.preventDefault(); commit(field); closePanel(); }
 		});
 	}
+	row.insertBefore(fields[0].wrap, endDateWrap);
+	row.insertBefore(arrow, endDateWrap);
+	updateSummary();
 	panel.id = `mc-time-panel-${ev.id}`;
 	panel.setAttribute('role', 'group');
 	panel.setAttribute('aria-label', '时间选择');

@@ -8,11 +8,14 @@
 	--mc-today-soft: rgba(224, 86, 107, 0.06);
 }
 
-.my-calendar-view .view-content {
+.my-calendar-view.view-content {
 	display: flex;
 	flex-direction: column;
+	flex: 1 1 0;
 	height: 100%;
-	padding: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	padding: 16px 16px 32px;
 	overflow: hidden;
 }
 
@@ -23,7 +26,7 @@
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
 	gap: 10px;
-	padding: 12px 16px 8px;
+	padding: 0 0 12px;
 	flex-shrink: 0;
 }
 
@@ -102,7 +105,7 @@
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	padding: 0 16px;
+	padding: 0;
 }
 
 /* ---------- 顶部视图切换栏 ---------- */
@@ -174,6 +177,7 @@
 
 .mc-weekdays {
 	display: grid;
+	flex-shrink: 0;
 	grid-template-columns: repeat(7, 1fr);
 	border-bottom: 1px solid var(--background-modifier-border);
 }
@@ -191,7 +195,7 @@
 	min-height: 0;
 	display: grid;
 	grid-template-columns: repeat(7, 1fr);
-	grid-template-rows: repeat(6, minmax(96px, 1fr));
+	grid-template-rows: repeat(6, minmax(max-content, 1fr));
 	overflow: auto;
 }
 
@@ -199,7 +203,7 @@
 	border-right: 1px solid var(--background-modifier-border);
 	border-bottom: 1px solid var(--background-modifier-border);
 	padding: 4px 6px;
-	min-height: 80px;
+	min-height: 64px;
 	cursor: pointer;
 	position: relative;
 	display: flex;
@@ -220,7 +224,8 @@
 .mc-range-bar.mc-range-before { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .mc-range-bar.mc-range-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .mc-cell-top { flex-shrink: 0; }
-.mc-row3.is-range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mc-month-grid .mc-chips { flex-shrink: 0; }
+.mc-row3.is-range { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 24px minmax(0, 1.3fr) minmax(0, 1fr); }
 .mc-modal .mc-row3.is-range .mc-date-field { grid-column: auto; }
 .mc-end-date-field[hidden] { display: none; }
 .mc-agenda-time { max-width: 45%; white-space: normal; overflow-wrap: anywhere; }
@@ -440,7 +445,7 @@
 
 .mc-week-head {
 	display: grid;
-	grid-template-columns: 48px repeat(7, 1fr);
+	grid-template-columns: 48px repeat(7, minmax(0, 1fr));
 	align-items: center;
 	padding: 6px 0;
 	border-bottom: 1px solid var(--background-modifier-border);
@@ -578,6 +583,32 @@
 	overflow-y: auto;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 8px;
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	scrollbar-color: transparent transparent;
+}
+.mc-week-scroll:hover, .mc-week-scroll:focus-within {
+	scrollbar-color: color-mix(in srgb, var(--text-muted) 35%, transparent) transparent;
+}
+.mc-week-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.mc-week-scroll::-webkit-scrollbar-track { background: transparent; }
+.mc-week-scroll::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+.mc-week-scroll:hover::-webkit-scrollbar-thumb, .mc-week-scroll:focus-within::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+.mc-time-sticky {
+	position: sticky;
+	top: 0;
+	z-index: 5;
+	background: var(--background-primary);
+}
+.mc-time-sticky .mc-week-head { border-bottom: 0; }
+.mc-time-sticky .mc-allday {
+	margin-bottom: 0;
+	border: 0;
+	border-top: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-radius: 0;
 }
 
 .mc-week-grid {
@@ -801,15 +832,20 @@
 /* ---------- 新建/编辑弹窗 ---------- */
 
 .mc-modal {
-	max-width: 560px;
+	max-width: none;
 	width: 100%;
-	--mc-control-height: 38px;
+	--mc-control-height: 44px;
+	container-type: inline-size;
+	container-name: mc-event-form;
 }
+.modal.mc-event-modal { width: min(720px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
 
 .mc-modal h3 {
 	margin: 0 0 14px;
 	font-weight: 800;
+	font-size: 1.5em;
 }
+.mc-modal .mc-field > input.mc-input { height: 44px; padding: 10px 12px; }
 
 .mc-field {
 	margin-bottom: 12px;
@@ -869,11 +905,14 @@
 .mc-time-control input::placeholder { color: var(--text-faint); font-size: .9em; }
 .mc-modal button.mc-time-trigger {
 	display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-	width: 32px; height: 30px; padding: 0; margin-right: 3px;
+	width: 32px; height: 34px; padding: 0; margin-right: 3px;
 	border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: var(--text-muted);
 }
 .mc-modal button.mc-time-trigger:hover, .mc-modal button.mc-time-trigger[aria-expanded="true"] { background: var(--background-modifier-hover); color: var(--interactive-accent); }
 .mc-time-trigger svg { width: 16px; height: 16px; }
+.mc-modal .mc-time-field button.mc-time-trigger { width: 44px; gap: 3px; }
+.mc-time-chevron { display: inline-flex; }
+.mc-time-trigger .mc-time-chevron svg { width: 12px; height: 12px; }
 .mc-time-panel[hidden] { display: none; }
 .mc-time-panel {
 	margin-top: 12px; padding: 14px; border-radius: 12px;
@@ -1000,11 +1039,49 @@
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 10px 24px;
-	margin: 12px 0;
+	gap: 8px;
+	margin: 12px 0 16px;
 }
-.mc-event-options .mc-check-row { margin: 0; }
-.mc-event-options .mc-check-label { white-space: nowrap; }
+.mc-event-options .mc-option-card {
+	display: inline-flex; align-items: center; gap: 8px;
+	min-height: 44px; min-width: 0; flex: 0 1 180px;
+	padding: 8px 12px; margin: 0; box-sizing: border-box;
+	border: 1px solid var(--background-modifier-border); border-radius: 8px;
+	background: var(--background-primary); color: var(--text-normal); cursor: pointer;
+	transition: background .15s, border-color .15s;
+}
+.mc-option-card:hover { border-color: var(--interactive-accent); }
+.mc-option-card:has(input:checked) {
+	border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
+	background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
+}
+.mc-option-card:focus-within { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.mc-option-card input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; margin: 0; accent-color: var(--interactive-accent); }
+.mc-option-icon, .mc-summary-icon { display: inline-flex; flex-shrink: 0; color: var(--text-muted); }
+.mc-option-icon svg { width: 18px; height: 18px; }
+.mc-option-card:has(input:checked) .mc-option-icon { color: var(--interactive-accent); }
+.mc-option-title { font-size: .9em; font-weight: 600; white-space: nowrap; }
+.mc-date-range-arrow { display: flex; align-items: center; justify-content: center; align-self: end; height: var(--mc-control-height); color: var(--text-muted); }
+.mc-date-range-arrow svg { width: 22px; height: 22px; }
+.mc-range-summary {
+	display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px;
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) 28%, var(--background-modifier-border));
+	border-radius: 9px; font-size: .8em; line-height: 1.6;
+	background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+	color: var(--interactive-accent);
+}
+.mc-summary-icon { color: inherit; }
+.mc-summary-icon svg { width: 18px; height: 18px; }
+.mc-range-summary.is-invalid { color: var(--text-error); }
+.mc-range-summary[hidden], .mc-date-range-arrow[hidden] { display: none; }
+@container mc-event-form (max-width: 600px) {
+	.mc-row3.is-range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.mc-row3.is-range .mc-date-range-arrow { grid-column: 1 / -1; height: 24px; width: 24px; justify-self: center; transform: rotate(90deg); }
+	.mc-event-options .mc-option-card { flex: 1 1 0; gap: 8px; padding: 8px 10px; }
+}
+@container mc-event-form (max-width: 300px) {
+	.mc-event-options { flex-direction: column; align-items: stretch; }
+}
 
 .mc-check-label {
 	display: inline-flex;
@@ -1058,10 +1135,6 @@
 }
 
 /* ---------- 窄侧栏适配 ---------- */
-
-.mc-body {
-	padding: 0 10px;
-}
 
 @media (max-width: 480px) {
 	.mc-switch-btn span:last-child {

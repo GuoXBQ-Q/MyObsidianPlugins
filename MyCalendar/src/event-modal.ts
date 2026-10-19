@@ -41,6 +41,7 @@ export class EventModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass('mc-modal');
+		this.modalEl.addClass('mc-event-modal');
 		contentEl.createEl('h3', { text: this.existing ? '编辑日程' : '新建日程' });
 
 		// 标题
@@ -56,15 +57,14 @@ export class EventModal extends Modal {
 		this.timeControl = mountTimeFields(contentEl, this.ev, this.plugin.settings.weekStart);
 
 		// 重要事件
-		const impRow = this.timeControl.optionsEl.createDiv('mc-check-row');
 		const importantId = `mc-important-${this.ev.id}`;
+		const impRow = this.timeControl.optionsEl.createEl('label', { cls: 'mc-option-card', attr: { for: importantId } });
 		const impCheck = impRow.createEl('input', { type: 'checkbox', attr: { id: importantId, 'aria-description': '日程覆盖的日期单元格将高亮突出显示' } });
 		impCheck.checked = !!this.ev.important;
 		impCheck.addEventListener('change', () => (this.ev.important = impCheck.checked));
-		const impLabel = impRow.createEl('label', { cls: 'mc-check-label', attr: { for: importantId } });
-		const impIcon = impLabel.createSpan({ cls: 'mc-important-icon', attr: { 'aria-hidden': 'true' } });
+		const impIcon = impRow.createSpan({ cls: 'mc-option-icon', attr: { 'aria-hidden': 'true' } });
 		setIcon(impIcon, 'star');
-		impLabel.createSpan({ text: '重要事件' });
+		impRow.createSpan({ cls: 'mc-option-title', text: '重要事件' });
 
 		// 分类颜色
 		this.colorControl = mountColorPicker(contentEl, this.ev, this.plugin.settings);
