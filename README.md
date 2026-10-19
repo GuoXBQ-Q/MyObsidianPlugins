@@ -81,7 +81,25 @@ git revert <提交编号>
 .\scripts\Publish-Plugins.ps1
 ```
 
-脚本创建 `plugins-日期时间-提交编号` 标签，并将当前分支和标签推送到 [GitHub 仓库](https://github.com/GuoXBQ-Q/MyObsidianPlugins)。GitHub Actions 自动测试、构建并校验压缩包，通过后发布到 [Releases](https://github.com/GuoXBQ-Q/MyObsidianPlugins/releases)。
+脚本先获取远程标签，再按已有 `plugins-x.x.x` 标签中的最高版本自动递增补丁版本，例如 `plugins-0.1.0` → `plugins-0.1.1`。没有此类标签时从 `plugins-0.1.0` 开始，旧的日期标签不参与版本计算。随后将当前分支和新标签推送到 [GitHub 仓库](https://github.com/GuoXBQ-Q/MyObsidianPlugins)。GitHub Actions 自动测试、构建并校验压缩包，通过后发布到 [Releases](https://github.com/GuoXBQ-Q/MyObsidianPlugins/releases)。
+
+需要提升次版本或大版本时，可选择递增级别，也可直接指定完整标签名：
+
+```powershell
+# 补丁版本：0.1.0 -> 0.1.1（默认行为）
+.\scripts\Publish-Plugins.ps1
+
+# 次版本：0.1.1 -> 0.2.0
+.\scripts\Publish-Plugins.ps1 -Bump Minor
+
+# 大版本：0.2.0 -> 1.0.0，或 1.2.3 -> 2.0.0
+.\scripts\Publish-Plugins.ps1 -Bump Major
+
+# 手动指定发布版本
+.\scripts\Publish-Plugins.ps1 -Tag "plugins-2.0.0"
+```
+
+`-Tag` 与 `-Bump` 二选一。标签必须符合 `plugins-x.x.x` 格式，重复标签会被拒绝；已发布的历史标签保留。这个版本号表示两个插件的统一发布批次，插件各自的 `manifest.json` 版本仍独立维护，不会随发布标签自动修改。
 
 Release 仅提供 `home-widgets.zip` 和 `my-calendar.zip`。每个压缩包根目录只包含对应插件的 `main.js`、`manifest.json` 和 `styles.css`。
 
@@ -90,6 +108,6 @@ Release 仅提供 `home-widgets.zip` 和 `my-calendar.zip`。每个压缩包根�
 | 脚本 | 用途 |
 | --- | --- |
 | `Build-PluginRelease.ps1` | 构建两个插件、生成并校验 ZIP，供 GitHub Actions 调用；也可用于本地打包 |
-| `Publish-Plugins.ps1` | 检查工作区、创建并推送发布标签，触发 GitHub Actions |
+| `Publish-Plugins.ps1` | 检查工作区、计算或指定发布版本、创建并推送标签，触发 GitHub Actions |
 
-单独执行本地打包可运行 `.\scripts\Build-PluginRelease.ps1 -Tag "plugins-local-build"`，需先安装 MyCalendar 开发依赖。结果保存在 `.plugin-releases/`，不纳入 Git；同名输出目录已存在时请换用新标签。
+单独执行本地打包可运行 `.\scripts\Build-PluginRelease.ps1 -Tag "plugins-0.0.0"`，需先安装 MyCalendar 开发依赖。结果保存在 `.plugin-releases/`，不纳入 Git；此命令不创建 Git 标签。同名输出目录已存在时请换用新版本号。
