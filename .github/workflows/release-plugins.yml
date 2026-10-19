@@ -1,0 +1,57 @@
+name: Release plugins
+
+on:
+  push:
+    tags:
+      - 'plugins-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install build dependencies
+        run: |
+          npm --prefix MyCalendar ci
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
+      - name: Check plugins
+        run: |
+          npm --prefix HomeWidgets test
+          if ($LASTEXITCODE -ne 0) { throw 'Home Widgets tests failed' }
+          npm --prefix MyCalendar run typecheck
+          if ($LASTEXITCODE -ne 0) { throw 'MyCalendar type check failed' }
+          npm --prefix MyCalendar test
+          if ($LASTEXITCODE -ne 0) { throw 'MyCalendar tests failed' }
+      - name: Build and verify release bundle
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          ./scripts/Build-PluginRelease.ps1 -Tag $env:RELEASE_TAG
+          ./tests/plugin-release.test.ps1 -PackagePath ".plugin-releases/$env:RELEASE_TAG/obsidian-plugins.zip"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $directory = ".plugin-releases/$env:RELEASE_TAG"
+          gh release create $env:RELEASE_TAG "$directory/obsidian-plugins.zip" "$directory/SHA256SUMS" "$directory/Update-Plugins.ps1" --repo $env:GITHUB_REPOSITORY --verify-tag --title $env:RELEASE_TAG --notes-file "$directory/release-notes.md" --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publishing failed' }

@@ -5,6 +5,9 @@
 !/AGENTS.md
 !/HomeWidgets/
 !/MyCalendar/
+!/scripts/
+!/tests/
+!/.github/
 
 # Dependencies, generated bundles and local recovery data.
 **/node_modules/
