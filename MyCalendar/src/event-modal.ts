@@ -55,19 +55,19 @@ export class EventModal extends Modal {
 		// 日期与时间
 		this.timeControl = mountTimeFields(contentEl, this.ev, this.plugin.settings.weekStart);
 
-		// 分类颜色
-		this.colorControl = mountColorPicker(contentEl, this.ev, this.plugin.settings);
-
 		// 重要事件
-		const impRow = contentEl.createDiv('mc-field mc-check-row');
+		const impRow = this.timeControl.optionsEl.createDiv('mc-check-row');
 		const importantId = `mc-important-${this.ev.id}`;
-		const impCheck = impRow.createEl('input', { type: 'checkbox', attr: { id: importantId } });
+		const impCheck = impRow.createEl('input', { type: 'checkbox', attr: { id: importantId, 'aria-description': '日程覆盖的日期单元格将高亮突出显示' } });
 		impCheck.checked = !!this.ev.important;
 		impCheck.addEventListener('change', () => (this.ev.important = impCheck.checked));
 		const impLabel = impRow.createEl('label', { cls: 'mc-check-label', attr: { for: importantId } });
 		const impIcon = impLabel.createSpan({ cls: 'mc-important-icon', attr: { 'aria-hidden': 'true' } });
 		setIcon(impIcon, 'star');
-		impLabel.createSpan({ text: '重要事件（当天单元格将高亮突出显示）' });
+		impLabel.createSpan({ text: '重要事件' });
+
+		// 分类颜色
+		this.colorControl = mountColorPicker(contentEl, this.ev, this.plugin.settings);
 
 		// 备注
 		contentEl.createEl('label', { cls: 'mc-label', text: '备注' });

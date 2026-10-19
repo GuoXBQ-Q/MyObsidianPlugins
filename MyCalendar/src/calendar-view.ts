@@ -71,7 +71,7 @@ export class CalendarView extends ItemView {
 		root.empty();
 		root.addClass('my-calendar-view');
 
-		// 顶部：标题 + 导航
+		// 顶部：日期、视图切换和导航共用一行。
 		const header = root.createDiv('mc-header');
 		this.mcTitle = header.createDiv('mc-title');
 		const nav = header.createDiv('mc-nav');
@@ -88,10 +88,8 @@ export class CalendarView extends ItemView {
 		addBtn.createSpan({ text: '新建' });
 		addBtn.addEventListener('click', () => this.openAdd(todayKey()));
 
-		this.bodyEl = root.createDiv('mc-body');
-
-		// 底部视图切换栏
-		this.switcherEl = root.createDiv('mc-switcher');
+		this.switcherEl = header.createDiv('mc-switcher');
+		header.insertBefore(this.switcherEl, nav);
 		const defs: { mode: ViewMode; label: string; icon: string }[] = [
 			{ mode: 'day', label: '日视图', icon: 'sun' },
 			{ mode: 'week', label: '周视图', icon: 'calendar-range' },
@@ -105,6 +103,7 @@ export class CalendarView extends ItemView {
 			btn.createSpan({ text: def.label });
 			btn.addEventListener('click', () => this.setMode(def.mode));
 		}
+		this.bodyEl = root.createDiv('mc-body');
 
 		this.rerender();
 	}

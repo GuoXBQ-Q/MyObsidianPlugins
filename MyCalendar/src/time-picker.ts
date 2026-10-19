@@ -12,11 +12,12 @@ export function normalizeTime(value: string): string | null {
 
 /** Date and time panels float beside their respective controls. */
 export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekStart: MyCalendarSettings['weekStart'] = 'monday') {
-	const rangeToggle = container.createDiv('mc-field mc-check-row');
+	const optionsEl = container.createDiv('mc-event-options');
+	const rangeToggle = optionsEl.createDiv('mc-check-row');
 	const rangeId = `mc-range-${ev.id}`;
-	const rangeCheck = rangeToggle.createEl('input', { type: 'checkbox', attr: { id: rangeId, 'aria-label': '跨天日程' } });
+	const rangeCheck = rangeToggle.createEl('input', { type: 'checkbox', attr: { id: rangeId, 'aria-label': '跨天日程', 'aria-description': '包含结束当天' } });
 	rangeCheck.checked = !!ev.endDate && ev.endDate > ev.date;
-	rangeToggle.createEl('label', { text: '跨天日程（包含结束当天）', attr: { for: rangeId } });
+	rangeToggle.createEl('label', { cls: 'mc-check-label', text: '跨天日程', attr: { for: rangeId } });
 	const row = container.createDiv('mc-row3');
 	const dateWrap = row.createDiv('mc-date-field');
 	const endDateWrap = row.createDiv('mc-end-date-field');
@@ -125,7 +126,7 @@ export function mountTimeFields(container: HTMLElement, ev: CalendarEvent, weekS
 	panel.id = `mc-time-panel-${ev.id}`;
 	panel.setAttribute('role', 'group');
 	panel.setAttribute('aria-label', '时间选择');
-	return { dispose() { popover.dispose(); dateControl.dispose(); endDateControl.dispose(); }, validate() {
+	return { optionsEl, dispose() { popover.dispose(); dateControl.dispose(); endDateControl.dispose(); }, validate() {
 		if (!dateControl.validate()) return false;
 		if (rangeCheck.checked) {
 			if (!endDateControl.validate()) return false;
