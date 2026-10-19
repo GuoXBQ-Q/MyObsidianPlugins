@@ -18,6 +18,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Build failed: $project" }
     }
     New-Item -ItemType Directory -Path $output -Force | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $stage = Join-Path $output 'content'
     New-Item -ItemType Directory -Path $stage | Out-Null
     $plugins = @()
@@ -29,39 +30,34 @@ try {
         if ($manifest.id -cne $id) { throw "Unexpected plugin ID in $project" }
         $destination = Join-Path $stage $id
         New-Item -ItemType Directory -Path $destination | Out-Null
-        $files = @()
         foreach ($name in @('main.js', 'manifest.json', 'styles.css')) {
             $source = Join-Path $build $name
             Copy-Item -LiteralPath $source -Destination (Join-Path $destination $name)
-            $files += [ordered]@{ name = $name; sha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant() }
         }
-        $plugins += [ordered]@{ id = $id; version = $manifest.version; files = $files }
+        $archive = Join-Path $output "$id.zip"
+        [System.IO.Compression.ZipFile]::CreateFromDirectory($destination, $archive)
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+        try {
+            if ($zip.Entries.Count -ne 3) { throw "Unexpected archive contents: $id" }
+            foreach ($name in @('main.js', 'manifest.json', 'styles.css')) {
+                $entry = $zip.GetEntry($name)
+                if (-not $entry) { throw "Missing release file: $id/$name" }
+                $stream = $entry.Open()
+                $sha256 = [System.Security.Cryptography.SHA256]::Create()
+                try { $hash = [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '') }
+                finally { $stream.Dispose(); $sha256.Dispose() }
+                if ($hash -ine (Get-FileHash -LiteralPath (Join-Path $build $name) -Algorithm SHA256).Hash) { throw "Release checksum mismatch: $id/$name" }
+            }
+        } finally { $zip.Dispose() }
+        $plugins += [ordered]@{ id = $id; version = $manifest.version }
     }
-    $bundle = [ordered]@{
-        schema = 1
-        tag = $Tag
-        commit = $commit.Trim()
-        createdAt = (Get-Date).ToUniversalTime().ToString('o')
-        plugins = $plugins
-    }
-    $bundle | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $stage 'bundle.json') -Encoding UTF8
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = Join-Path $output 'obsidian-plugins.zip'
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $archive)
-    $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    "$hash  obsidian-plugins.zip" | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS') -Encoding ASCII
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Update-Plugins.ps1') -Destination $output
     @(
-        "Plugin bundle: $Tag"
+        "Plugin builds: $Tag"
         "Source commit: $($commit.Trim())"
         ''
         ($plugins | ForEach-Object { "- $($_.id): $($_.version)" })
         ''
-        'Download Update-Plugins.ps1 on the other Windows computer and run:'
-        '.\Update-Plugins.ps1 -VaultPath "D:\path\to\your-vault"'
-        ''
-        'Close Obsidian before updating; reopen it after the update.'
-        'Only plugin code is updated. Existing data.json and vault notes are preserved.'
+        'Each ZIP contains main.js, manifest.json and styles.css at its root.'
     ) | Set-Content -LiteralPath (Join-Path $output 'release-notes.md') -Encoding UTF8
     Write-Output "Release files prepared: $output"
 } finally {

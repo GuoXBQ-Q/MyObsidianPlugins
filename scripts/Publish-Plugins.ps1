@@ -24,7 +24,7 @@ try {
     & git show-ref --verify --quiet "refs/tags/$Tag"
     if ($LASTEXITCODE -eq 0) { throw "Tag already exists: $Tag" }
     if ($LASTEXITCODE -ne 1) { throw 'Cannot check release tags.' }
-    & git tag -a $Tag -m "release: publish plugin bundle $Tag"
+    & git tag -a $Tag -m "release: publish plugin builds $Tag"
     if ($LASTEXITCODE -ne 0) { throw 'Cannot create release tag.' }
     & git push --atomic origin "HEAD:refs/heads/$branch" "refs/tags/$Tag"
     if ($LASTEXITCODE -ne 0) {
