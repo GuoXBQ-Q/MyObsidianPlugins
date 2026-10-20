@@ -13,9 +13,9 @@
 .hw-home [data-widget-type="banner"] .hw-banner .hw-banner-heading h1{font:700 46px/1.25 'Segoe Print','Comic Sans MS','KaiTi',cursive;letter-spacing:6px;color:#66617e;margin:0;transform:rotate(-2deg);overflow-wrap:anywhere;min-width:0}
 .hw-home [data-widget-type="banner"] .hw-banner-subtitle{font-size:16px;line-height:1.6;letter-spacing:2px;color:#66617e;margin:3px 0 9px;text-align:right}
 .hw-home [data-widget-type="banner"] .hw-banner-subtitle span{font-size:17px;color:#e9a6bf;margin-left:9px}
-.hw-home [data-widget-type="banner"] .hw-banner-quote{position:relative;display:grid;place-items:center;margin:0;padding:10px 54px;min-height:79px;border:1px solid #e2ddec;border-radius:13px;background:#eae6f2d9;color:#706987;box-shadow:inset 0 1px 6px #ffffff40}
+.hw-home [data-widget-type="banner"] .hw-banner-quote{position:relative;display:grid;place-items:center;margin:0;padding:10px 54px;min-height:79px;border:1px solid var(--hw-line);border-radius:13px;background:color-mix(in srgb,var(--hw-accent) 6%,var(--hw-panel));color:#706987;box-shadow:none}
 .hw-home [data-widget-type="banner"] .hw-banner-quote p{width:100%;min-width:0;margin:0;white-space:pre-wrap;text-wrap:balance;text-align:center;font-size:14px;line-height:1.5;letter-spacing:.5px;color:inherit}
-.hw-home [data-widget-type="banner"] .hw-banner-quote-mark{position:absolute;left:11px;top:0;font:700 45px/1.2 Georgia,serif;color:#bcb4d3}
+.hw-home [data-widget-type="banner"] .hw-banner-quote-mark{position:absolute;left:11px;top:0;font:700 45px/1.2 Georgia,serif;color:color-mix(in srgb,var(--hw-accent) 55%,var(--hw-panel))}
 .hw-home [data-widget-type="banner"] .hw-banner-quote-tools{position:absolute;right:4px;top:3px;display:flex;align-items:center;gap:2px;opacity:0;pointer-events:none;transition:opacity .15s ease}
 .hw-home [data-widget-type="banner"] .hw-banner-quote-tools .hw-button{display:inline-flex;align-items:center;justify-content:center;padding:4px;min-height:0;color:#827398;border-radius:5px}
 .hw-home [data-widget-type="banner"] .hw-banner-quote-tools svg{width:13px;height:13px;display:block}
