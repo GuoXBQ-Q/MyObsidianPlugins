@@ -11,13 +11,19 @@ export function eventDescription(ev: CalendarEvent): string {
 	return `${ev.title} · ${when}${ev.important ? ' · 重要日程' : ''}${ev.note ? ' · ' + ev.note : ''}`;
 }
 
+/** A zero comparison preserves saved order for equal or legacy creation timestamps. */
+export function compareEvents(a: CalendarEvent, b: CalendarEvent, newEventsAtBottom: boolean): number {
+	if (newEventsAtBottom) return (Number.isFinite(a.createdAt) ? a.createdAt : 0) - (Number.isFinite(b.createdAt) ? b.createdAt : 0);
+	return (a.startTime ?? '').localeCompare(b.startTime ?? '') || a.title.localeCompare(b.title);
+}
+
 /** Index only visible days, even for a range spanning many years. */
-export function indexEvents(events: CalendarEvent[], start: Date, count: number): Map<string, CalendarEvent[]> {
+export function indexEvents(events: CalendarEvent[], start: Date, count: number, newEventsAtBottom = false): Map<string, CalendarEvent[]> {
 	const map = new Map<string, CalendarEvent[]>();
 	for (let i = 0; i < count; i++) {
 		const key = fmtDate(addDays(start, i));
 		map.set(key, events.filter(ev => ev.date <= key && eventEndDate(ev) >= key)
-			.sort((a, b) => (a.startTime ?? '').localeCompare(b.startTime ?? '') || a.title.localeCompare(b.title)));
+			.sort((a, b) => compareEvents(a, b, newEventsAtBottom)));
 	}
 	return map;
 }
@@ -32,18 +38,19 @@ export interface RangeSegment {
 }
 
 /** Clip ranges to a visible week/day, assigning non-overlapping horizontal lanes. */
-export function rangeSegments(events: CalendarEvent[], start: Date, count = 7): RangeSegment[] {
+export function rangeSegments(events: CalendarEvent[], start: Date, count = 7, newEventsAtBottom = false): RangeSegment[] {
 	const days = Array.from({ length: count }, (_, i) => fmtDate(addDays(start, i)));
 	const spans = events.filter(ev => isMultiDay(ev) && ev.date <= days[count - 1] && eventEndDate(ev) >= days[0])
 		.map(ev => ({ ev, start: Math.max(0, days.findIndex(day => day >= ev.date)),
 			end: days.reduce((end, day, i) => day <= eventEndDate(ev) ? i : end, 0),
 			lane: 0, continuesBefore: ev.date < days[0], continuesAfter: eventEndDate(ev) > days[count - 1] }))
-		.sort((a, b) => a.start - b.start || b.end - a.end || a.ev.id.localeCompare(b.ev.id));
-	const ends: number[] = [];
+		.sort((a, b) => newEventsAtBottom ? compareEvents(a.ev, b.ev, true) : a.start - b.start || b.end - a.end || a.ev.id.localeCompare(b.ev.id));
+	const lanes: RangeSegment[][] = [];
 	for (const span of spans) {
-		let lane = ends.findIndex(end => end < span.start);
-		if (lane < 0) lane = ends.length;
-		span.lane = lane; ends[lane] = span.end;
+		// Creation order can differ from date order; check every occupied interval.
+		let lane = lanes.findIndex(items => items.every(item => item.end < span.start || item.start > span.end));
+		if (lane < 0) { lane = lanes.length; lanes.push([]); }
+		span.lane = lane; lanes[lane].push(span);
 	}
 	return spans;
 }

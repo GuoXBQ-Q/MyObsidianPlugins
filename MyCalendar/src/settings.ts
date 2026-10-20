@@ -44,6 +44,16 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName('新日程显示在下方')
+			.setDesc('开启后，同一天的日程按添加顺序排列；关闭后按开始时间、标题排序。适用于月历、首页组件、全天/跨天栏和日程列表；时间轴仍按实际时间定位。')
+			.addToggle((t) =>
+				t.setValue(this.plugin.settings.newEventsAtBottom).onChange(async (v) => {
+					this.plugin.settings.newEventsAtBottom = v;
+					await this.plugin.saveAll();
+				})
+			);
+
+		new Setting(containerEl)
 			.setName('周首日')
 			.setDesc('月视图和周视图每星期从哪一天开始')
 			.addDropdown((dd) =>

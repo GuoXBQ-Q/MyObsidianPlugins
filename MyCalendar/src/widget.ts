@@ -161,8 +161,8 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				const first = new Date(cursor.y, cursor.m - 1, 1);
 				const weekStartIdx = plugin.settings.weekStart === 'monday' ? 1 : 0;
 				const gridStart = addDays(first, -(first.getDay() - weekStartIdx + 7) % 7);
-				const map = indexEvents(plugin.events, gridStart, 42);
-				const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(plugin.events, addDays(gridStart, i * 7)));
+				const map = indexEvents(plugin.events, gridStart, 42, plugin.settings.newEventsAtBottom);
+				const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(plugin.events, addDays(gridStart, i * 7), 7, plugin.settings.newEventsAtBottom));
 				const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
 
 				grid.replaceChildren();

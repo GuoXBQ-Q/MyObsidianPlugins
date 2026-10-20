@@ -4,7 +4,7 @@ import { CalendarEvent, ViewMode } from './types';
 import { EventModal } from './event-modal';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
-import { eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
+import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
 import {
 	addDays,
 	addMonths,
@@ -161,7 +161,7 @@ export class CalendarView extends ItemView {
 	// ------------- 数据 -------------
 
 	private eventsByDate(start: Date, count = 1): Map<string, CalendarEvent[]> {
-		return indexEvents(this.plugin.events, start, count);
+		return indexEvents(this.plugin.events, start, count, this.plugin.settings.newEventsAtBottom);
 	}
 
 	private openAdd(dateKey: string, time?: string): void {
@@ -258,7 +258,7 @@ export class CalendarView extends ItemView {
 		const offset = (first.getDay() - weekStartIdx + 7) % 7;
 		const gridStart = addDays(first, -offset);
 		const map = this.eventsByDate(gridStart, 42);
-		const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(this.plugin.events, addDays(gridStart, i * 7)));
+		const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(this.plugin.events, addDays(gridStart, i * 7), 7, settings.newEventsAtBottom));
 		const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
 
 		const labels = weekdayLabels(settings.weekStart);
@@ -342,7 +342,7 @@ export class CalendarView extends ItemView {
 		label.createSpan({ text: '跨天' });
 		const cells = row.createDiv('mc-allday-days');
 		cells.style.gridTemplateColumns = `repeat(${days.length}, minmax(0, 1fr))`;
-		const spans = rangeSegments(this.plugin.events, days[0], days.length);
+		const spans = rangeSegments(this.plugin.events, days[0], days.length, this.plugin.settings.newEventsAtBottom);
 		const lanes = Math.max(0, ...spans.map(span => span.lane + 1));
 		for (const [index, day] of days.entries()) {
 			const key = fmtDate(day);
@@ -514,11 +514,7 @@ export class CalendarView extends ItemView {
 			return;
 		}
 
-		const sorted = [...this.plugin.events].sort((a, b) => {
-			const ak = a.date + (a.startTime ?? '00:00');
-			const bk = b.date + (b.startTime ?? '00:00');
-			return ak.localeCompare(bk);
-		});
+		const sorted = [...this.plugin.events].sort((a, b) => a.date.localeCompare(b.date) || compareEvents(a, b, settings.newEventsAtBottom));
 		const today = todayKey();
 		let lastKey = '';
 

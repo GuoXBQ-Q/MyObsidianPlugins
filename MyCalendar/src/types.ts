@@ -29,6 +29,8 @@ export interface MyCalendarSettings {
 	/** 显示法定节假日（休）与调休上班（班）标记 */
 	showHolidays: boolean;
 	defaultView: ViewMode;
+	/** 同日日程按添加顺序排列，新日程显示在下方 */
+	newEventsAtBottom: boolean;
 	/** 日/周视图时间轴起始小时（0-23） */
 	dayStartHour: number;
 	/** 日/周视图时间轴结束小时（1-24） */
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: MyCalendarSettings = {
 	showFestivals: true,
 	showHolidays: true,
 	defaultView: 'month',
+	newEventsAtBottom: true,
 	dayStartHour: 6,
 	dayEndHour: 23,
 	customColors: [],
