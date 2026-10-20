@@ -1,0 +1,103 @@
+/* Shared by Home Widgets and MyCalendar. Keep all rules scoped to the updater. */
+.plugin-update-card {
+  --pu-blue: #2563eb;
+  --pu-green: #15803d;
+  --pu-orange: #c25c0a;
+  --pu-red: var(--text-error, #dc2626);
+  color: var(--text-normal);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 14px;
+  padding: 22px;
+  margin: 20px 0 28px;
+  container-type: inline-size;
+}
+.theme-dark .plugin-update-card {
+  --pu-blue: #79a6ff;
+  --pu-green: #71d99d;
+  --pu-orange: #fbb66a;
+}
+.plugin-update-card .plugin-update-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.plugin-update-card .plugin-update-heading h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text-normal);
+}
+.plugin-update-card .plugin-update-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  flex-shrink: 0;
+}
+.plugin-update-card .plugin-update-status[data-tone="success"] { color: var(--pu-green); background: color-mix(in srgb, var(--pu-green) 9%, transparent); }
+.plugin-update-card .plugin-update-status[data-tone="available"] { color: var(--pu-orange); background: color-mix(in srgb, var(--pu-orange) 9%, transparent); }
+.plugin-update-card .plugin-update-status[data-tone="error"] { color: var(--pu-red); background: color-mix(in srgb, var(--pu-red) 8%, transparent); }
+.plugin-update-card .plugin-update-status[data-tone="info"] { color: var(--pu-blue); background: color-mix(in srgb, var(--pu-blue) 9%, transparent); }
+.plugin-update-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.plugin-update-icon svg { width: 17px; height: 17px; }
+.plugin-update-card .plugin-update-versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.plugin-update-card .plugin-update-version { display: flex; align-items: center; gap: 10px; border: 1px solid var(--background-modifier-border); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.plugin-update-card .plugin-update-version > .plugin-update-icon { width: 28px; height: 28px; color: var(--pu-blue); }
+.plugin-update-card .plugin-update-version > .plugin-update-icon svg { width: 20px; height: 20px; }
+.plugin-update-card .plugin-update-version-info { min-width: 0; }
+.plugin-update-card .plugin-update-label { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.plugin-update-card .plugin-update-number { font-size: 20px; font-weight: 650; line-height: 1.35; margin-top: 2px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.plugin-update-card .plugin-update-message { margin: 14px 0 0; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; color: var(--text-muted); }
+.plugin-update-card .plugin-update-message[data-tone="error"] { color: var(--pu-red); }
+.plugin-update-card .plugin-update-notes { margin-top: 14px; }
+.plugin-update-card .plugin-update-notes summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; font-size: 13px; padding: 8px 0; list-style: none; }
+.plugin-update-card .plugin-update-notes summary::-webkit-details-marker { display: none; }
+.plugin-update-card .plugin-update-notes summary::after { content: '›'; margin-left: auto; font-size: 20px; line-height: 1; color: var(--text-muted); transform: rotate(0deg); }
+.plugin-update-card .plugin-update-notes[open] summary::after { transform: rotate(90deg); }
+.plugin-update-card .plugin-update-notes-body { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; color: var(--text-muted); font-size: 13px; line-height: 1.65; padding: 4px 0 4px 27px; }
+.plugin-update-card .plugin-update-auto.setting-item { margin-top: 18px; padding: 16px 0; border: 0; border-top: 1px solid var(--background-modifier-border); border-bottom: 1px solid var(--background-modifier-border); border-radius: 0; background: transparent; box-shadow: none; gap: 16px; align-items: center; }
+.plugin-update-card .plugin-update-auto .setting-item-info { flex: 1; min-width: 0; width: auto; margin: 0; }
+.plugin-update-card .plugin-update-auto .setting-item-name { font-size: 14px; font-weight: 600; }
+.plugin-update-card .plugin-update-auto .setting-item-description { color: var(--text-muted); font-size: 12px; line-height: 1.6; margin-top: 3px; }
+.plugin-update-card .plugin-update-auto .setting-item-control { flex: 0 0 auto; width: auto; min-width: 0; padding: 0; }
+.plugin-update-card .plugin-update-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-top: 16px; }
+.plugin-update-card .plugin-update-last-check { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.plugin-update-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.plugin-update-card .plugin-update-actions { margin-left: auto; }
+.plugin-update-card button.plugin-update-button,
+.plugin-update-confirm button.plugin-update-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; line-height: 1.4; height: auto; min-height: 36px; padding: 8px 12px; border: 1px solid var(--background-modifier-border); border-radius: 7px; background: var(--background-primary); color: var(--text-normal); box-shadow: none; white-space: nowrap; cursor: pointer; }
+.plugin-update-card button.plugin-update-button:hover:not(:disabled),
+.plugin-update-confirm button.plugin-update-button:hover:not(:disabled) { background: var(--background-modifier-hover); }
+.plugin-update-card button.plugin-update-button.is-primary:not(:disabled),
+.plugin-update-confirm button.plugin-update-button.is-primary:not(:disabled) { background: #2563eb; border-color: #2563eb; color: #fff; }
+.plugin-update-card button.plugin-update-button.is-primary:hover:not(:disabled),
+.plugin-update-confirm button.plugin-update-button.is-primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+.plugin-update-card button.plugin-update-button:disabled { color: var(--text-faint); background: var(--background-secondary); opacity: 0.65; cursor: default; }
+.plugin-update-card button.plugin-update-button:focus-visible,
+.plugin-update-card summary:focus-visible,
+.plugin-update-confirm button.plugin-update-button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.plugin-update-confirm .plugin-update-actions { margin-top: 24px; }
+.plugin-update-card [hidden] { display: none !important; }
+.plugin-update-card .is-spinning { animation: plugin-update-spin 1.2s linear infinite; }
+@keyframes plugin-update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .plugin-update-card .is-spinning { animation: none; } }
+@container (max-width: 520px) {
+  .plugin-update-card .plugin-update-version { padding: 10px; gap: 8px; }
+  .plugin-update-card .plugin-update-footer { align-items: flex-start; }
+  .plugin-update-card .plugin-update-actions { width: 100%; }
+}
+@container (max-width: 340px) {
+  .plugin-update-card .plugin-update-versions { grid-template-columns: 1fr; gap: 10px; }
+  .plugin-update-card .plugin-update-heading { gap: 8px; flex-wrap: wrap; }
+  .plugin-update-card .plugin-update-auto.setting-item { flex-direction: row; }
+  .plugin-update-card .plugin-update-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plugin-update-card .plugin-update-actions .is-primary { grid-column: 1 / -1; }
+}

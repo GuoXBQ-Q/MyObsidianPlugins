@@ -9,7 +9,8 @@ class UpdateController {
     Object.assign(this, {id, version, appVersion, io, request, unpack, digest, notify, now, timeout, setTimer, cancelTimer});
     this.state = {autoCheck:true, lastCheck:0, notifiedVersion:''};
     this.installedVersion = version; this.status = '尚未检查'; this.listeners = new Set(); this.alive = true;
-    this.busy = true; this.candidate = null; this.blocked = false;
+    this.busy = true; this.candidate = null; this.latestRelease = null; this.lastSuccess = 0; this.blocked = false;
+    this.phase = 'idle'; this.checkError = false; this.savingSettings = false;
     this.pendingRequests = new Set();
   }
   assertActive() { if (!this.alive) throw new Error('插件已卸载，更新已取消'); }
@@ -24,26 +25,39 @@ class UpdateController {
         if (state.formatVersion !== 1 || typeof state.autoCheck !== 'boolean' || !Number.isFinite(state.lastCheck) || typeof state.notifiedVersion !== 'string') throw new Error('更新器配置格式不支持');
         this.state = {autoCheck:state.autoCheck, lastCheck:state.lastCheck, notifiedVersion:state.notifiedVersion};
       }
-      if (recovered) { this.status = '已恢复中断的更新，请重启 Obsidian'; this.blocked = true; }
-      else if (this.pendingRestart) this.status = '已安装，重启 Obsidian 后生效';
-      if (schedule) this.schedule(15000);
-    } catch (e) { this.blocked = true; this.status = '更新功能不可用：' + e.message; }
+      if (recovered) { this.status = '已恢复中断的更新，请重启 Obsidian'; this.blocked = true; this.phase = 'blocked'; }
+      else if (this.pendingRestart) { this.status = '更新已安装，重启后生效'; this.phase = 'installed'; }
+      if (schedule) this.schedule(15000, true);
+    } catch (e) { this.blocked = true; this.phase = 'blocked'; this.status = '更新功能不可用：' + e.message; }
     this.busy = false; this.emit();
   }
   get pendingRestart() { return this.installedVersion !== this.version; }
+  get canInstall() {
+    return this.alive && !this.busy && !this.savingSettings && !this.blocked && !this.checkError && !this.pendingRestart &&
+      !!this.candidate?.compatible && compareVersions(this.candidate.version, this.installedVersion) > 0;
+  }
   async saveState() { await this.io.saveState({formatVersion:1, ...this.state}); }
   async setAutoCheck(value) {
+    if (!this.alive || this.busy || this.blocked || this.savingSettings) return;
+    const previous = this.state.autoCheck;
+    this.savingSettings = true;
     this.state.autoCheck = value;
-    try { await this.saveState(); } catch (e) { this.status = '保存更新设置失败：' + e.message; }
-    if (value) this.schedule(15000);
+    this.emit();
+    try { await this.saveState(); }
+    catch (e) {
+      this.state.autoCheck = previous;
+      if (this.alive) this.notify('保存更新设置失败：' + e.message);
+    }
+    this.savingSettings = false;
+    this.schedule(15000, value && !previous);
     this.emit();
   }
-  schedule(delay) {
+  schedule(delay, force = false) {
     this.cancelTimer(this.timer);
-    if (!this.alive) return;
+    if (!this.alive || !this.state.autoCheck || this.blocked || this.pendingRestart) return;
     this.timer = this.setTimer(async () => {
-      if (this.state.autoCheck && this.now() - this.state.lastCheck >= DAY) await this.check(false);
-      this.schedule(this.state.autoCheck ? Math.max(15000, DAY - (this.now() - this.state.lastCheck)) : DAY);
+      if (this.state.autoCheck && (force || this.now() - this.state.lastCheck >= DAY)) await this.check(false);
+      this.schedule(Math.max(15000, DAY - (this.now() - this.state.lastCheck)));
     }, delay);
   }
   async fetch(url, binary = false) {
@@ -64,29 +78,30 @@ class UpdateController {
     } finally { clearTimeout(timer); this.pendingRequests.delete(cancel); }
   }
   async check(manual = true) {
-    if (this.busy || this.blocked || !this.alive || this.pendingRestart) return;
-    this.busy = true; this.status = '正在检查更新…'; this.emit();
+    if (this.busy || this.savingSettings || this.blocked || !this.alive || this.pendingRestart) return;
+    this.busy = true; this.phase = 'checking'; this.status = '正在检查更新…'; this.emit();
     try {
       const release = await this.fetch(`https://api.github.com/repos/${REPO}/releases/latest`);
       this.state.lastCheck = this.now();
       const candidate = readRelease(release, this.id, this.appVersion);
+      this.latestRelease = candidate; this.lastSuccess = this.state.lastCheck; this.checkError = false;
       this.candidate = compareVersions(candidate.version, this.installedVersion) > 0 ? candidate : null;
+      this.phase = this.candidate ? 'available' : 'latest';
       this.status = this.candidate ? (candidate.compatible ? '发现新版本 ' + candidate.version : '需要 Obsidian ' + candidate.minAppVersion + ' 或更新版本') : '已是最新版本';
       if (this.candidate && candidate.compatible && this.state.notifiedVersion !== candidate.version) {
         this.state.notifiedVersion = candidate.version;
         await this.saveState(); this.assertActive(); this.notify('发现新版本 ' + candidate.version + '，请到插件设置中下载安装');
       } else await this.saveState();
     } catch (e) {
-      this.candidate = null; this.status = '检查失败：' + e.message;
+      this.checkError = true; this.phase = 'check-error'; this.status = '检查失败：' + e.message;
       if (this.alive) { this.state.lastCheck = this.now(); try { await this.saveState(); } catch (_) { /* Retain the actionable request error. */ } }
       if (manual && this.alive) this.notify(this.status);
     } finally { this.busy = false; this.emit(); }
   }
   async install() {
     const candidate = this.candidate;
-    if (!this.alive || this.busy || this.blocked || this.pendingRestart || !candidate?.compatible) return;
-    if (compareVersions(candidate.version, this.installedVersion) <= 0) return;
-    this.busy = true; this.status = '正在下载并校验…'; this.emit();
+    if (!this.canInstall) return;
+    this.busy = true; this.phase = 'installing'; this.status = '正在下载并校验…'; this.emit();
     try {
       const bytes = await this.fetch(candidate.url, true); this.assertActive();
       if (bytes.byteLength !== candidate.size || await this.digest(bytes) !== candidate.digest) throw new Error('下载文件的 SHA-256 或大小校验失败');
@@ -96,9 +111,10 @@ class UpdateController {
       if (manifest.id !== this.id || manifest.version !== candidate.version || manifest.minAppVersion !== candidate.minAppVersion) throw new Error('包内 manifest 与发布信息不一致');
       this.status = '正在备份并安装…'; this.emit();
       await this.io.install(files, candidate.version, () => this.assertActive());
-      this.installedVersion = candidate.version; this.status = '已安装，重启 Obsidian 后生效';
+      this.installedVersion = candidate.version; this.phase = 'installed'; this.status = '更新已安装，重启后生效';
+      this.cancelTimer(this.timer);
       if (this.alive) this.notify(this.status);
-    } catch (e) { this.status = '更新失败：' + e.message; if (this.alive) this.notify(this.status); }
+    } catch (e) { this.phase = 'install-error'; this.status = '更新失败：' + e.message; if (this.alive) this.notify(this.status); }
     finally { this.busy = false; this.emit(); }
   }
   dispose() {

@@ -121,18 +121,63 @@ test('CI version gate allows unchanged packages and rejects changed same-version
   assert.throws(()=>validateUpgrade(old,pluginFiles('home-widgets','0.1.0'),'home-widgets'),/decrease/);
 });
 
-test('automatic checks respect 24-hour cadence, the toggle and disposal', async () => {
+test('automatic checks run once at startup, then respect 24-hour cadence, the toggle and disposal', async () => {
   const day = 86400000; let now = 2 * day, task, calls = 0;
   const controller = new UpdateController({id:'home-widgets',version:'0.2.0',appVersion:'1.8.0', now:()=>now,
     io:{initialize:async()=>({installed:{id:'home-widgets',version:'0.2.0'},state:{formatVersion:1,autoCheck:true,lastCheck:now-23*3600000,notifiedVersion:''}}),saveState:async()=>{}},
     request:async()=>{calls++;return {status:200,json:releaseFor()};},
     setTimer:(callback,delay)=>{task={callback,delay};return task;},cancelTimer:()=>{task=null;}});
   await controller.initialize(); assert.equal(task.delay,15000);
-  await task.callback(); assert.equal(calls,0); assert.equal(task.delay,3600000);
-  now += 3600000; await task.callback(); assert.equal(calls,1); assert.equal(task.delay,day);
-  await controller.setAutoCheck(false); now += day; await task.callback(); assert.equal(calls,1);
-  await controller.setAutoCheck(true); await task.callback(); assert.equal(calls,2);
+  await task.callback(); assert.equal(calls,1); assert.equal(task.delay,day);
+  now += 23*3600000; await task.callback(); assert.equal(calls,1); assert.equal(task.delay,3600000);
+  now += 3600000; await task.callback(); assert.equal(calls,2); assert.equal(task.delay,day);
+  await controller.setAutoCheck(false); assert.equal(task,null);
+  await controller.check(); assert.equal(calls,3); // Disabling automatic checks must keep manual checks available.
+  await controller.setAutoCheck(true); await task.callback(); assert.equal(calls,4);
   controller.dispose(); assert.equal(task,null);
+});
+
+test('failed checks retain the last successful result without allowing stale installations; retry restores availability', async t => {
+  const f = await fixture(t); await f.controller.check();
+  const release = f.controller.latestRelease, succeeded = f.controller.lastSuccess;
+  f.controller.request = async () => ({status:500}); await f.controller.check(false);
+  assert.equal(f.controller.phase,'check-error'); assert.equal(f.controller.checkError,true);
+  assert.equal(f.controller.latestRelease,release); assert.equal(f.controller.lastSuccess,succeeded);
+  assert.equal(f.controller.canInstall,false); await f.controller.install();
+  assert.deepEqual(await fs.readFile(path.join(f.directory,'main.js')),f.old['main.js']);
+  f.controller.request = async () => ({status:200,json:f.release}); await f.controller.check();
+  assert.equal(f.controller.checkError,false); assert.equal(f.controller.canInstall,true);
+  f.release.assets = []; await f.controller.check();
+  assert.equal(f.controller.phase,'check-error'); assert.equal(f.controller.latestRelease.version,'0.2.0');
+});
+
+test('an equal release is retained as the latest version, but an initial error never reports latest', async t => {
+  const f = await fixture(t,{request:async()=>({status:500})}); await f.controller.check();
+  assert.equal(f.controller.latestRelease,null); assert.equal(f.controller.phase,'check-error'); assert.equal(f.controller.canInstall,false);
+  f.controller.version = f.controller.installedVersion = '0.2.0';
+  f.controller.request = async()=>({status:200,json:f.release}); await f.controller.check();
+  assert.equal(f.controller.latestRelease.version,'0.2.0'); assert.equal(f.controller.phase,'latest'); assert.equal(f.controller.canInstall,false);
+});
+
+test('automatic checks only detect releases, and failed toggle persistence restores the saved preference', async () => {
+  let task, downloads = 0, denySave = false;
+  const controller = new UpdateController({id:'home-widgets',version:'0.1.0',appVersion:'1.8.0',
+    io:{initialize:async()=>({installed:{id:'home-widgets',version:'0.1.0'},state:{formatVersion:1,autoCheck:false,lastCheck:0,notifiedVersion:''}}),
+      saveState:async()=>{if(denySave)throw new Error('disk full');}},
+    request:async params=>{if(!params.url.endsWith('/latest'))downloads++;return {status:200,json:releaseFor()};},
+    setTimer:(callback,delay)=>task={callback,delay},cancelTimer:()=>{task=null;}});
+  await controller.initialize(); assert.equal(task,null);
+  await controller.setAutoCheck(true); assert.equal(task.delay,15000); await task.callback();
+  assert.equal(controller.phase,'available'); assert.equal(downloads,0);
+  denySave=true; await controller.setAutoCheck(false); assert.equal(controller.state.autoCheck,true); assert(task);
+  controller.dispose(); assert.equal(task,null);
+});
+
+test('release notes exclude updater metadata and remain plain content', () => {
+  const release = releaseFor(); release.body = release.body.replace('notes', '## 更新内容\n修复已知问题。\n<script>unsafe</script>');
+  const result = readRelease(release,'home-widgets','1.8.0');
+  assert.equal(result.notes,'## 更新内容\n修复已知问题。\n<script>unsafe</script>');
+  assert(!result.notes.includes('formatVersion'));
 });
 test('browser timers initialize, check and dispose without an illegal receiver', async () => {
   const vm = require('node:vm'), callbacks = new Map(); let nextTimer = 0;

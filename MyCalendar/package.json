@@ -1,6 +1,6 @@
 {
 	"name": "my-calendar",
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"description": "Obsidian 日历日程插件",
 	"main": "main.js",
 	"scripts": {

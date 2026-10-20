@@ -30,6 +30,7 @@ await esbuild.build({
 	banner: { js: banner },
 });
 
-for (const name of ["manifest.json", "styles.css"]) {
-	fs.copyFileSync(path.join(root, name), path.join(root, "build", name));
-}
+fs.copyFileSync(path.join(root, "manifest.json"), path.join(root, "build/manifest.json"));
+fs.writeFileSync(path.join(root, "build/styles.css"),
+	fs.readFileSync(path.join(root, "styles.css"), "utf8") + "\n" +
+	fs.readFileSync(path.join(root, "../shared/plugin-updater.css"), "utf8"));

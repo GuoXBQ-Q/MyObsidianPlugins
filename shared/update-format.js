@@ -33,7 +33,8 @@ function readRelease(release, id, appVersion) {
   if (asset.browser_download_url !== expected) throw new Error('更新附件地址不匹配');
   if (!/^sha256:[a-f0-9]{64}$/i.test(asset.digest || '')) throw new Error('更新附件缺少 SHA-256 校验信息');
   if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 32 * 1024 * 1024) throw new Error('更新附件大小异常');
-  return {...plugin, url: expected, digest: asset.digest.slice(7).toLowerCase(), size: asset.size,
+  const notes = (body.slice(0, start) + body.slice(end + END.length)).trim();
+  return {...plugin, notes, url: expected, digest: asset.digest.slice(7).toLowerCase(), size: asset.size,
     releaseUrl: `https://github.com/${REPO}/releases/tag/${release.tag_name}`,
     compatible: compareVersions(appVersion, plugin.minAppVersion) >= 0};
 }
