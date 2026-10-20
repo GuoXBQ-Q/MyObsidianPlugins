@@ -410,20 +410,104 @@
 	font-weight: 600;
 }
 
+/* ---------- 设置页：与 Home Widgets 保持相同的主题、页签与分组样式 ---------- */
+
+.mc-settings {
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	font-size: var(--font-ui-medium, 14px);
+	line-height: 1.6;
+	padding-bottom: 24px;
+	container: mc-settings / inline-size;
+}
+.mc-settings * { box-sizing: border-box; }
+.mc-settings [hidden] { display: none !important; }
+.mc-settings .mc-set-heading { margin: 0 0 20px; }
+.mc-settings .mc-set-heading h2 { font-size: 20px; font-weight: 600; margin: 0 0 3px; }
+.mc-settings .mc-set-heading p { font-size: 12px; color: var(--text-muted); margin: 0; }
+.mc-settings .mc-set-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	margin: 0 0 20px;
+}
+.mc-settings button.mc-set-tab {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	min-height: 36px;
+	height: auto;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	margin: 0 0 -1px;
+	padding: 7px 20px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font: inherit;
+	line-height: 1.5;
+	cursor: pointer;
+	white-space: normal;
+	text-align: center;
+	transition: color .15s ease, border-color .15s ease;
+}
+.mc-settings button.mc-set-tab:hover { color: var(--text-normal); background: transparent; box-shadow: none; }
+.mc-settings button.mc-set-tab.is-active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
+.mc-settings button:focus-visible,
+.mc-settings input:focus-visible,
+.mc-settings select:focus-visible,
+.mc-settings .mc-set-panel:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
+.mc-settings .mc-set-group {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 14px;
+	background: transparent;
+	overflow: hidden;
+	margin: 0 0 20px;
+}
+.mc-settings .mc-set-group-heading { padding: 16px 20px; border-bottom: 1px solid var(--background-modifier-border); }
+.mc-settings .mc-set-group-heading h3 { font-size: 15px; font-weight: 600; line-height: 1.5; color: var(--text-normal); margin: 0; }
+.mc-settings .mc-set-group-heading p { font-size: 12px; line-height: 1.7; color: var(--text-muted); margin: 5px 0 0; }
+.mc-settings .mc-set-group-body > .setting-item {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	margin: 0;
+	padding: 18px 20px;
+	gap: 16px;
+}
+.mc-settings .mc-set-group-body > .setting-item + .setting-item { border-top: 1px solid var(--background-modifier-border); }
+.mc-settings .setting-item-info { flex: 1; min-width: 0; }
+.mc-settings .setting-item-name { font-size: 14px; font-weight: 500; }
+.mc-settings .setting-item-description { font-size: 12px; line-height: 1.7; margin-top: 4px; }
+.mc-settings .setting-item-control { flex-shrink: 0; max-width: 55%; gap: 8px; }
+.mc-settings .setting-item-control input[type=number] { width: 90px; max-width: 100%; }
+.mc-settings .mc-set-panel > .plugin-update-card { margin: 0 0 20px; }
+
+@container mc-settings (max-width: 600px) {
+	.mc-settings button.mc-set-tab { padding: 7px 12px; font-size: 13px; }
+	.mc-settings .mc-set-group-heading { padding: 14px 16px; }
+	.mc-settings .mc-set-group-body > .setting-item { padding: 14px 16px; flex-wrap: wrap; }
+	.mc-settings .setting-item-control { max-width: 100%; }
+}
+
 /* ---------- 设置页：在线节假日数据 ---------- */
 
 .mc-hol-status {
-	margin: -10px 0 18px;
-	padding: 10px 14px;
-	border: 1px dashed var(--background-modifier-border);
-	border-radius: 8px;
+	margin: 0;
+	padding: 14px 20px;
+	border-top: 1px solid var(--background-modifier-border);
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 }
 
 .mc-hol-line {
-	font-size: 0.85em;
+	font-size: 12px;
 	color: var(--text-muted);
 	display: flex;
 	align-items: center;
@@ -439,6 +523,10 @@
 
 .mc-hol-muted {
 	opacity: 0.7;
+}
+
+@container mc-settings (max-width: 600px) {
+	.mc-hol-status { padding: 14px 16px; }
 }
 
 /* ---------- 周 / 日视图 ---------- */

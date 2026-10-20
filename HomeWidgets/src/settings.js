@@ -33,21 +33,30 @@ class HomeSettings extends PluginSettingTab {
     const panels=new Map(),buttons=new Map();
     let selected='general',layout,width,loadError='';
     const activeTypes={builtin:null,external:null};
-    for(const [key,label] of [['general','通用'],['builtin','内置组件'],['external','外部插件']]){
+    const isComponentTab=()=>selected==='builtin'||selected==='external';
+    for(const [key,label] of [['general','通用'],['builtin','内置组件'],['external','外部插件'],['updates','更新']]){
       const button=tabs.createEl('button',{cls:'hw-set-tab',text:label});button.type='button';
       const panel=root.createDiv('hw-set-panel');
       button.setAttribute('role','tab');button.setAttribute('aria-controls','hw-settings-'+key);button.id='hw-settings-tab-'+key;
-      panel.id='hw-settings-'+key;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',button.id);
+      panel.id='hw-settings-'+key;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',button.id);panel.tabIndex=0;
       buttons.set(key,button);panels.set(key,panel);
       button.addEventListener('click',()=>selectTab(key));
+      button.addEventListener('keydown',event=>{
+        const keys=[...buttons.keys()];let next;
+        if(event.key==='ArrowRight'||event.key==='ArrowLeft'){
+          const step=event.key==='ArrowRight'?1:-1;next=keys[(keys.indexOf(key)+step+keys.length)%keys.length];
+        }else if(event.key==='Home'||event.key==='End')next=event.key==='Home'?keys[0]:keys[keys.length-1];
+        else return;
+        event.preventDefault();selectTab(next);buttons.get(next).focus();
+      });
     }
     const selectTab=key=>{
       selected=key;
-      for(const [id,button] of buttons){const active=id===key;button.classList.toggle('is-active',active);button.setAttribute('aria-selected',String(active));panels.get(id).hidden=!active;}
-      if(key!=='general')renderComponents();
+      for(const [id,button] of buttons){const active=id===key;button.classList.toggle('is-active',active);button.setAttribute('aria-selected',String(active));button.tabIndex=active?0:-1;panels.get(id).hidden=!active;}
+      if(isComponentTab())renderComponents();
     };
     const general=panels.get('general');
-    this.disposeUpdater=renderUpdateSettings(general,this.plugin.updater,require('obsidian'));
+    this.disposeUpdater=renderUpdateSettings(panels.get('updates'),this.plugin.updater,require('obsidian'));
     const home=group(general,'首页与布局','选择首页笔记，调整组件的显示范围。');
     new Setting(home).setName('首页笔记').setDesc('搭配 Homepage 插件，可在启动时自动打开。').addText(text=>text.setValue(this.plugin.settings.homeFile).onChange(value=>{this.plugin.settings.homeFile=value;this.run(this.plugin.saveSettings());}));
     new Setting(home).setName('页面最大宽度').setDesc('选择跟随窗口，或设置固定宽度。').addDropdown(dd=>{
@@ -152,11 +161,11 @@ class HomeSettings extends PluginSettingTab {
         lineControl.setValue(String(type.lineHeight)).setDisabled(false);resetControl.setDisabled(false);
         customRow.settingEl.hidden=type.font!=='custom';customControl.setDisabled(type.font!=='custom');
         if(containerEl.ownerDocument.activeElement!==customControl.inputEl)customControl.setValue(type.customFont);
-        if(selected!=='general')renderComponents();
-      }catch(e){if(view.active){loadError=e.message;error.textContent='读取布局失败：'+e.message;if(selected!=='general')renderComponents();}}
+        if(isComponentTab())renderComponents();
+      }catch(e){if(view.active){loadError=e.message;error.textContent='读取布局失败：'+e.message;if(isComponentTab())renderComponents();}}
       finally{loading=false;if(again&&view.active){again=false;return refresh();}}
     };
-    this.unsub=[store.subscribe(refresh),this.plugin.bus.on('file:'+store.path,refresh),this.plugin.bus.on('registry',()=>{if(view.active&&selected!=='general')renderComponents();}),this.plugin.bus.on('integrations',()=>{if(view.active){renderIntegrations();if(selected!=='general')renderComponents();}})];
+    this.unsub=[store.subscribe(refresh),this.plugin.bus.on('file:'+store.path,refresh),this.plugin.bus.on('registry',()=>{if(view.active&&isComponentTab())renderComponents();}),this.plugin.bus.on('integrations',()=>{if(view.active){renderIntegrations();if(isComponentTab())renderComponents();}})];
     selectTab('general');refresh();
   }
   instanceCard(def,item,store){

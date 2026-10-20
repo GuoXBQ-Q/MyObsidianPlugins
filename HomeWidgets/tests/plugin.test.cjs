@@ -85,6 +85,22 @@ test('late layout reads cannot update a closed or reopened settings page',async(
  f.plugin.unload();assert.equal(f.plugin.bus.topics.size,0);
 });
 
+test('the update tab survives layout and integration refreshes without writing settings',async()=>{
+ const pending=[];const f=await settingsFixture(()=>new Promise(resolve=>pending.push(resolve)));
+ f.tab.display();const root=f.tab.containerEl,tabs=root.find('hw-set-tab');
+ const updateTab=tabs.find(el=>el.textContent==='更新');assert(updateTab);updateTab.click();
+ const updatePanel=root.find('hw-set-panel').find(el=>el.id==='hw-settings-updates');
+ const card=updatePanel.find('plugin-update-card')[0];assert(card);assert.equal(updatePanel.hidden,false);
+ assert.equal(root.find('hw-set-panel')[0].find('plugin-update-card').length,0);
+ pending.shift()(settingsLayout());await settleSettings();
+ f.plugin.bus.emit('registry');f.plugin.bus.emit('integrations');f.plugin.bus.emit('layout:Home/widgets.json');
+ pending.shift()(settingsLayout({maxWidth:1600}));await settleSettings();
+ assert.equal(updatePanel.find('plugin-update-card')[0],card);assert.equal(updatePanel.find('hw-set-subtabs').length,0);
+ tabs[1].click();assert.equal(updatePanel.hidden,true);assert(root.find('hw-set-card').length>0);
+ updateTab.click();assert.equal(updatePanel.find('plugin-update-card')[0],card);assert.equal(f.errors.length,0);assert.equal(f.writes,0);
+ f.plugin.unload();assert.equal(f.plugin.bus.topics.size,0);
+});
+
 test('bursts of layout notifications serialize reads and stop on settings teardown',async()=>{
  const pending=[];let reads=0;const f=await settingsFixture(()=>{reads++;return new Promise(resolve=>pending.push(resolve));});f.tab.display();
  for(let i=0;i<10;i++){f.plugin.bus.changed('Home/widgets.json');f.plugin.bus.emit('layout:Home/widgets.json');}

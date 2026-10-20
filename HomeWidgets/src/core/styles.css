@@ -97,7 +97,7 @@
 .hw-home[data-theme=native] [data-widget-type="banner"] .hw-banner-date{color:var(--text-faint)}
 
 /* Settings use Obsidian's theme directly, without the dashboard container. */
-.hw-settings{color:var(--text-normal);font-family:var(--font-interface);font-size:var(--font-ui-medium,14px);line-height:1.6;padding-bottom:24px}
+.hw-settings{color:var(--text-normal);font-family:var(--font-interface);font-size:var(--font-ui-medium,14px);line-height:1.6;padding-bottom:24px;container:hw-settings / inline-size}
 .hw-settings *{box-sizing:border-box}
 .hw-settings [hidden]{display:none!important}
 .hw-settings .hw-set-heading{margin:0 0 20px}
@@ -108,7 +108,8 @@
 .hw-settings .hw-set-subtab{font-size:13px;padding:7px 16px}
 .hw-settings .hw-set-tab:hover,.hw-settings .hw-set-subtab:hover{color:var(--text-normal);background:transparent;box-shadow:none}
 .hw-settings .hw-set-tab.is-active,.hw-settings .hw-set-subtab.is-active{color:var(--text-normal);border-bottom-color:var(--interactive-accent)}
-.hw-settings button:focus-visible,.hw-settings input:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:3px}
+.hw-settings button:focus-visible,.hw-settings input:focus-visible,.hw-settings .hw-set-panel:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:3px}
+.hw-settings .hw-set-panel>.plugin-update-card{margin:0 0 20px}
 .hw-settings .hw-set-intro{margin:-3px 0 14px}
 .hw-settings .hw-set-note,.hw-settings .hw-set-empty{color:var(--text-muted);font-size:13px;line-height:1.7}
 .hw-settings .hw-set-empty{margin:0;padding:20px}
@@ -158,5 +159,5 @@
 .hw-settings .hw-set-warning{font-size:12px;line-height:1.7;color:var(--text-warning,var(--color-orange));margin:-6px 0 16px}
 .hw-settings .hw-set-error{font-size:13px;line-height:1.7;color:var(--text-error);margin:12px 0}
 .hw-settings .hw-set-error:empty{display:none}
-@media(max-width:600px){.hw-settings .hw-set-tab{padding:7px 12px;font-size:13px}.hw-settings .hw-set-subtab{padding:7px 10px;font-size:12px}.hw-settings .hw-set-summary{padding:16px;gap:10px}.hw-settings .hw-set-summary .hw-set-icon{flex-basis:32px;width:32px;font-size:26px}.hw-settings .hw-set-group-heading,.hw-settings .hw-set-integration{padding:14px 16px}.hw-settings .hw-set-group-body>.setting-item{padding:14px 16px;flex-wrap:wrap}.hw-settings .setting-item-control{max-width:100%}.hw-settings .hw-set-card{padding:0 16px}.hw-settings .hw-set-fields{padding:14px 16px}}
+@container hw-settings (max-width:600px){.hw-settings .hw-set-tab{padding:7px 12px;font-size:13px}.hw-settings .hw-set-subtab{padding:7px 10px;font-size:12px}.hw-settings .hw-set-summary{padding:16px;gap:10px}.hw-settings .hw-set-summary .hw-set-icon{flex-basis:32px;width:32px;font-size:26px}.hw-settings .hw-set-group-heading,.hw-settings .hw-set-integration{padding:14px 16px}.hw-settings .hw-set-group-body>.setting-item{padding:14px 16px;flex-wrap:wrap}.hw-settings .setting-item-control{max-width:100%}.hw-settings .hw-set-card{padding:0 16px}.hw-settings .hw-set-fields{padding:14px 16px}}
 

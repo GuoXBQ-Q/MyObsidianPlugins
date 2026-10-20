@@ -21,16 +21,75 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 		this.disposeUpdater?.();
 		this.disposeUpdater = null;
 		this.holidayStatusEl = null;
+		this.yearInputEl = null;
 	}
 
 	display(): void {
-		this.disposeUpdater?.();
+		this.hide();
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl('h2', { text: 'MyCalendar 日历设置' });
-		this.disposeUpdater = renderUpdateSettings(containerEl, this.plugin.updater, obsidian);
+		const root = containerEl.createDiv('mc-settings');
+		const heading = root.createDiv('mc-set-heading');
+		heading.createEl('h2', { text: 'MyCalendar 日历设置' });
+		heading.createEl('p', { text: '调整日历显示、节假日与插件更新。' });
+		const tabs = root.createDiv('mc-set-tabs');
+		tabs.setAttribute('role', 'tablist');
+		tabs.setAttribute('aria-label', '设置分类');
+		const buttons = new Map<string, HTMLButtonElement>();
+		const panels = new Map<string, HTMLElement>();
+		const selectTab = (key: string) => {
+			for (const [id, button] of buttons) {
+				const active = id === key;
+				button.classList.toggle('is-active', active);
+				button.setAttribute('aria-selected', String(active));
+				button.tabIndex = active ? 0 : -1;
+				panels.get(id)!.hidden = !active;
+			}
+		};
+		for (const [key, label] of [['general', '通用'], ['updates', '更新']]) {
+			const button = tabs.createEl('button', { cls: 'mc-set-tab', text: label });
+			button.type = 'button';
+			button.id = `mc-settings-tab-${key}`;
+			button.setAttribute('role', 'tab');
+			button.setAttribute('aria-controls', `mc-settings-${key}`);
+			const panel = root.createDiv('mc-set-panel');
+			panel.id = `mc-settings-${key}`;
+			panel.setAttribute('role', 'tabpanel');
+			panel.setAttribute('aria-labelledby', button.id);
+			panel.tabIndex = 0;
+			buttons.set(key, button);
+			panels.set(key, panel);
+			button.addEventListener('click', () => selectTab(key));
+			button.addEventListener('keydown', (event) => {
+				const keys = [...buttons.keys()];
+				let next: string;
+				if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+					const step = event.key === 'ArrowRight' ? 1 : -1;
+					next = keys[(keys.indexOf(key) + step + keys.length) % keys.length];
+				} else if (event.key === 'Home' || event.key === 'End') {
+					next = event.key === 'Home' ? keys[0] : keys[keys.length - 1];
+				} else return;
+				event.preventDefault();
+				selectTab(next);
+				buttons.get(next)!.focus();
+			});
+		}
+		this.renderGeneralSettings(panels.get('general')!);
+		this.disposeUpdater = renderUpdateSettings(panels.get('updates')!, this.plugin.updater, obsidian);
+		selectTab('general');
+	}
 
-		new Setting(containerEl)
+	private group(parent: HTMLElement, title: string, description: string): HTMLElement {
+		const section = parent.createDiv('mc-set-group');
+		const heading = section.createDiv('mc-set-group-heading');
+		heading.createEl('h3', { text: title });
+		heading.createEl('p', { text: description });
+		return section.createDiv('mc-set-group-body');
+	}
+
+	private renderGeneralSettings(containerEl: HTMLElement): void {
+		const view = this.group(containerEl, '视图与日程', '选择默认视图，调整日程顺序与每周起始日。');
+		new Setting(view)
 			.setName('默认视图')
 			.setDesc('打开日历时默认显示的视图')
 			.addDropdown((dd) =>
@@ -43,7 +102,7 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		new Setting(view)
 			.setName('新日程显示在下方')
 			.setDesc('开启后，同一天的日程按添加顺序排列；关闭后按开始时间、标题排序。适用于月历、首页组件、全天/跨天栏和日程列表；时间轴仍按实际时间定位。')
 			.addToggle((t) =>
@@ -53,7 +112,7 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl)
+		new Setting(view)
 			.setName('周首日')
 			.setDesc('月视图和周视图每星期从哪一天开始')
 			.addDropdown((dd) =>
@@ -66,7 +125,8 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
+		const holidays = this.group(containerEl, '农历与节假日', '显示农历、节日节气与法定放假调休安排。');
+		new Setting(holidays)
 			.setName('显示农历')
 			.setDesc('在日期旁显示农历日期')
 			.addToggle((t) =>
@@ -76,7 +136,7 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl)
+		new Setting(holidays)
 			.setName('显示节日与节气')
 			.setDesc('以红色文字显示传统节日和二十四节气')
 			.addToggle((t) =>
@@ -86,7 +146,7 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 				})
 			);
 
-		new Setting(containerEl)
+		new Setting(holidays)
 			.setName('显示法定节假日调休')
 			.setDesc('以「休」「班」角标显示国务院发布的放假与调休安排（内置 2025、2026 年，可通过下方按钮在线获取其他年份）')
 			.addToggle((t) =>
@@ -96,12 +156,13 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 				})
 			);
 
-		this.renderHolidayFetcher(containerEl);
-		this.holidayStatusEl = containerEl.createDiv('mc-hol-status');
+		this.renderHolidayFetcher(holidays);
+		this.holidayStatusEl = holidays.createDiv('mc-hol-status');
 		this.renderHolidayStatus();
 
-		this.hourSetting(containerEl, '时间轴起始小时', '日/周视图时间轴从几点开始（0-23）', 'dayStartHour');
-		this.hourSetting(containerEl, '时间轴结束小时', '日/周视图时间轴到几点结束（0-23）', 'dayEndHour');
+		const timeline = this.group(containerEl, '时间轴', '设置日视图和周视图的时间显示范围。');
+		this.hourSetting(timeline, '时间轴起始小时', '日/周视图时间轴从几点开始（0-23）', 'dayStartHour');
+		this.hourSetting(timeline, '时间轴结束小时', '日/周视图时间轴到几点结束（0-23）', 'dayEndHour');
 	}
 
 	/** 在线获取节假日安排：年份输入 + 获取按钮 */
