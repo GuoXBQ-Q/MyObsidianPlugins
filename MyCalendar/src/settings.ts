@@ -3,20 +3,32 @@ import { fetchYearArrangement } from './holiday-fetch';
 import { BUILT_IN_YEARS, fetchedYears } from './holidays';
 import type MyCalendarPlugin from './main';
 import { ViewMode } from './types';
+import * as obsidian from 'obsidian';
+import { renderUpdateSettings } from '../../shared/plugin-updater';
 
 export class MyCalendarSettingTab extends PluginSettingTab {
 	private plugin: MyCalendarPlugin;
 	private holidayStatusEl: HTMLElement | null = null;
+	private disposeUpdater: (() => void) | null = null;
 
 	constructor(app: App, plugin: MyCalendarPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+		plugin.register(() => this.hide());
+	}
+
+	hide(): void {
+		this.disposeUpdater?.();
+		this.disposeUpdater = null;
+		this.holidayStatusEl = null;
 	}
 
 	display(): void {
+		this.disposeUpdater?.();
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.createEl('h2', { text: 'MyCalendar 日历设置' });
+		this.disposeUpdater = renderUpdateSettings(containerEl, this.plugin.updater, obsidian);
 
 		new Setting(containerEl)
 			.setName('默认视图')

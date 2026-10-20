@@ -11,6 +11,7 @@ const {HomeSettings}=require('./settings');
 const {createPluginDataStore}=require('./services/plugin-data');
 const {createPersistentEventService}=require('./services/persistent-events');
 const {assertFields}=require('./core/format');
+const {createPluginUpdater}=require('../../shared/plugin-updater');
 class HomeRenderChild extends MarkdownRenderChild {
   constructor(el,plugin,path,sourcePath){super(el);this.plugin=plugin;this.path=path;this.sourcePath=sourcePath;}
   onload(){let unloaded=false;this.plugin.renders.add(this);this.register(()=>{unloaded=true;this.host?.dispose();this.plugin.renders.delete(this);});
@@ -23,6 +24,7 @@ class HomeWidgetsPlugin extends Plugin {
     this.dataStore=createPluginDataStore({load:()=>this.loadData(),save:data=>this.saveData(data)});
     const saved=await this.dataStore.read();this.settings={homeFile:saved.homeFile||'homepage.md'};this.bus=new Bus();this.registry=new WidgetRegistry();registerBuiltins(this.registry);this.renders=new Set();this.register(()=>{for(const render of [...this.renders])render.unload();this.renders.clear();});
     this.io=createVaultIO(this.app,this.bus);this.integrations=createIntegrations(this.app,{Component,MarkdownRenderer,Scope});this.services=createServices(this.io,this.bus,this.integrations,createPersistentEventService(this.dataStore,this.bus));
+    this.updater=createPluginUpdater(this,require('obsidian'));
     this.registerMarkdownCodeBlockProcessor('home-widgets',(source,el,ctx)=>{
       let settings;try{settings=source.trim()?parseYaml(source):{};if(settings===null)settings={};if(typeof settings!=='object'||Array.isArray(settings))throw new Error('代码块应填写 layout: Home/widgets.json');}
       catch(e){el.createEl('p',{text:'Home Widgets 配置错误：'+e.message});return;}

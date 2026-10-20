@@ -6,11 +6,14 @@ import { MyCalendarSettingTab } from './settings';
 import { CalendarEvent, DEFAULT_SETTINGS, MyCalendarSettings } from './types';
 import { parseDateKey, todayKey } from './utils';
 import { createMyCalendarWidget } from './widget';
+import * as obsidian from 'obsidian';
+import { createPluginUpdater, type PluginUpdater } from '../../shared/plugin-updater';
 
 type HomeWidgetSource = { pluginId: string; pluginName: string };
 type HomeWidgetsAPI = { registerWidget: (definition: unknown, source: HomeWidgetSource) => () => void };
 
 export default class MyCalendarPlugin extends Plugin {
+	updater: PluginUpdater | null = null;
 	settings: MyCalendarSettings = DEFAULT_SETTINGS;
 	events: CalendarEvent[] = [];
 	/** 从网络获取的年份安排，持久化在 data.json */
@@ -22,6 +25,7 @@ export default class MyCalendarPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		this.updater = createPluginUpdater(this, obsidian);
 
 		this.registerView(VIEW_TYPE_MY_CALENDAR, (leaf: WorkspaceLeaf) => new CalendarView(leaf, this));
 

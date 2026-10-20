@@ -5,6 +5,7 @@ const {configureFields,configureInitial,configurePatch}=require('./core/schema')
 const {widgetIcon,icon}=require('./core/icons');
 const {showNewWidget,confirmRemoveWidget}=require('./core/widget-instances');
 const {FONT_OPTIONS,applyTypography}=require('./core/typography');
+const {renderUpdateSettings}=require('../../shared/plugin-updater');
 
 function group(parent,title,description){
   const section=parent.createDiv('hw-set-group');
@@ -46,6 +47,7 @@ class HomeSettings extends PluginSettingTab {
       if(key!=='general')renderComponents();
     };
     const general=panels.get('general');
+    this.disposeUpdater=renderUpdateSettings(general,this.plugin.updater,require('obsidian'));
     const home=group(general,'首页与布局','选择首页笔记，调整组件的显示范围。');
     new Setting(home).setName('首页笔记').setDesc('搭配 Homepage 插件，可在启动时自动打开。').addText(text=>text.setValue(this.plugin.settings.homeFile).onChange(value=>{this.plugin.settings.homeFile=value;this.run(this.plugin.saveSettings());}));
     new Setting(home).setName('页面最大宽度').setDesc('选择跟随窗口，或设置固定宽度。').addDropdown(dd=>{
@@ -191,6 +193,7 @@ class HomeSettings extends PluginSettingTab {
   }
   run(promise){promise.catch(e=>new Notice('Home Widgets：'+e.message));}
   disposeView(){
+    this.disposeUpdater?.();this.disposeUpdater=null;
     if(this.view)this.view.active=false;
     this.unsub?.forEach(unsub=>{try{unsub();}catch{}});
     this.unsub=null;this.forms?.dispose();this.forms=null;this.refresh=null;

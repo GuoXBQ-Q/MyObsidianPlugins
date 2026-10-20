@@ -35,6 +35,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
       - name: Check plugins
         run: |
+          node --test shared/tests/updater.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Updater tests failed' }
           npm --prefix HomeWidgets test
           if ($LASTEXITCODE -ne 0) { throw 'Home Widgets tests failed' }
           npm --prefix MyCalendar run typecheck
@@ -44,8 +46,11 @@ jobs:
       - name: Build and verify plugin archives
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ./scripts/Build-PluginRelease.ps1 -Tag $env:RELEASE_TAG
+          ./scripts/Build-PluginRelease.ps1 -Tag $env:RELEASE_TAG -CheckPreviousRelease
+          node --test shared/tests/bundles.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled updater integration tests failed' }
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

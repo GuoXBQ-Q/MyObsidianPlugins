@@ -4,7 +4,7 @@ const ROOT=path.resolve(__dirname,'..'),out=path.join(ROOT,'build');fs.mkdirSync
 function bundle(entry,browser=false){const modules=new Map();
   function add(file){file=path.resolve(file);if(modules.has(file))return;let source=fs.readFileSync(file,'utf8');modules.set(file,'');
     source=source.replace(/require\((['"])([^'"]+)\1\)/g,(match,quote,name)=>{
-      if(!name.startsWith('.')){if(name!=='obsidian'||browser)throw new Error('Unexpected external module '+name);return 'externalRequire("obsidian")';}
+      if(!name.startsWith('.')){if(browser||!['obsidian','node:fs/promises','node:path','node:crypto','node:zlib'].includes(name))throw new Error('Unexpected external module '+name);return 'externalRequire('+JSON.stringify(name)+')';}
       let target=path.resolve(path.dirname(file),name);if(fs.existsSync(target)&&fs.statSync(target).isDirectory())target=path.join(target,'index.js');else if(!path.extname(target))target+='.js';add(target);return '__require('+JSON.stringify(path.relative(ROOT,target).replaceAll('\\','/'))+')';
     });modules.set(file,source);
   }
