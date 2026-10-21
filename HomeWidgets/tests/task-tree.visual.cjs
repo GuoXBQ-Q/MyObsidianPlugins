@@ -52,7 +52,8 @@ async function main(){
     await input.fill('连续新增第一项');await input.press('Enter');await cb(primary,'连续新增第一项').waitFor();await input.waitFor({state:'detached'});
     await primary.getByRole('button',{name:'添加子待办 把这一周安排好',exact:true}).click();await input.waitFor();assert.equal(await input.inputValue(),'');assert.equal(await input.evaluate(el=>el===document.activeElement),true);
     await input.fill('连续新增第二项');await primary.getByLabel('子待办截止日期（可选）',{exact:true}).fill('2026-12-01');
-    const dateBox=await primary.getByLabel('子待办截止日期（可选）',{exact:true}).boundingBox(),calendarTriggerBox=await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).boundingBox();assert(calendarTriggerBox.x>=dateBox.x+dateBox.width);assert(dateBox.width<160);
+    const dateBox=await primary.getByLabel('子待办截止日期（可选）',{exact:true}).boundingBox(),calendarTriggerBox=await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).boundingBox();assert(calendarTriggerBox.x>dateBox.x+dateBox.width/2&&calendarTriggerBox.x+calendarTriggerBox.width<=dateBox.x+dateBox.width);assert(dateBox.width<=175);
+    const saveBox=await primary.getByRole('button',{name:'添加',exact:true}).boundingBox(),cancelBox=await primary.getByRole('button',{name:'取消',exact:true}).boundingBox(),toolsBox=await primary.locator('.hw-task-child-editor-tools').boundingBox();assert(Math.abs(cancelBox.x+cancelBox.width-toolsBox.x-toolsBox.width)<1);assert(saveBox.x>dateBox.x+dateBox.width);assert(Math.abs(saveBox.y+saveBox.height/2-dateBox.y-dateBox.height/2)<1);
     await page.screenshot({path:path.join(output,'add-child.png'),fullPage:true});
     await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).click();
     await input.press('Escape');assert.equal(await input.isVisible(),true);
@@ -99,7 +100,7 @@ async function main(){
     await cb(primary,'连续新增第二项').waitFor();assert.equal(await primary.getByRole('checkbox').count(),5);
     await page.setViewportSize({width:390,height:950});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await primary.getByRole('button',{name:'添加子待办 把这一周安排好',exact:true}).click();await input.waitFor();await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).click();
-    const calendar=primary.getByRole('group',{name:'日期选择器',exact:true});assert(await calendar.isVisible());const calendarBox=await calendar.boundingBox();assert(calendarBox.x>=0&&calendarBox.x+calendarBox.width<=390);await input.press('Escape');assert.equal(await input.count(),1);await input.press('Escape');await input.waitFor({state:'detached'});
+    const calendar=primary.getByRole('group',{name:'日期选择器',exact:true});assert(await calendar.isVisible());const calendarBox=await calendar.boundingBox();assert(calendarBox.x>=0&&calendarBox.x+calendarBox.width<=390);await input.press('Escape');assert.equal(await input.count(),1);await page.screenshot({path:path.join(output,'add-child-narrow.png'),fullPage:true});await input.press('Escape');await input.waitFor({state:'detached'});
     await primary.getByRole('button',{name:'编辑待办 把这一周安排好',exact:true}).click();const edit=page.getByRole('dialog');await edit.getByRole('textbox',{name:'要做的事',exact:true}).fill('倒计时加一个归档的功能，点击删除之后，弹出的页面里加一个归档按钮，归档的话就不显示了');await edit.getByRole('button',{name:'保存',exact:true}).click();await edit.waitFor({state:'detached'});
     for(const typography of [{fontSize:15,lineHeight:1.75},{fontSize:18,lineHeight:1.9}]){
       await page.evaluate(async typography=>{const layout=JSON.parse(files.get('Home/widgets.json'));layout.typography=typography;files.set('Home/widgets.json',JSON.stringify(layout));await host.sync();},typography);
