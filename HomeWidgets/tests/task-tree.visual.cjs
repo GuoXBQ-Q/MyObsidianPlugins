@@ -18,12 +18,16 @@ async function main(){
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'build/preview.js'),'utf8')});
     await page.evaluate(async()=>{
       const widgets=['primary','mirror'].map(id=>({id,type:'tasks',title:id==='primary'?'工作待办':'同源另一实例',span:6,settings:{source:'tasks.md',area:'work',showCompleted:true,limit:20}}));
-      window.files=new Map([['Home/widgets.json',JSON.stringify({version:2,theme:'native',widgets})],['tasks.md','- [ ] 把这一周安排好 #area/work ^p\n  - [x] 整理学习资料 ^a\n  - [ ] 读完第一章，记下三个问题 ^b\n- [ ] 傍晚散步 20 分钟 #area/work ^other\n- [ ] 周五小组讨论，提前准备好 #area/work ^third\n']]);
+      widgets.push({id:'life',type:'tasks',title:'同文件生活待办',span:6,settings:{source:'tasks.md',area:'life'}},{id:'separate',type:'tasks',title:'另一来源待办',span:6,settings:{source:'other.md',area:'work'}});
+      window.files=new Map([['Home/widgets.json',JSON.stringify({version:2,theme:'native',widgets})],['other.md','- [ ] 独立任务 #area/work ^independent\n'],['tasks.md','- [ ] 把这一周安排好 #area/work ^p\n  - [x] 整理学习资料 ^a\n  - [ ] 读完第一章，记下三个问题 ^b\n- [ ] 傍晚散步 20 分钟 #area/work ^other\n- [ ] 周五小组讨论，提前准备好 #area/work ^third\n- [ ] 生活任务 #area/life ^life-task\n']]);
       const revisions=new Map();
       window.fetch=async(url,options)=>{
         const request=JSON.parse(options.body),p=request.path;let result;
         switch(request.action){
-          case 'read':result=files.get(p);break;
+          case 'read':
+            if(p==='tasks.md'&&window.failTaskRead)return {ok:false,status:500,json:async()=>({error:'模拟读取失败'})};
+            if(p==='tasks.md'&&window.readDelayMs)await new Promise(resolve=>setTimeout(resolve,window.readDelayMs));
+            result=files.get(p);break;
           case 'exists':result=files.has(p);break;
           case 'snapshot':result={text:files.get(p),version:revisions.get(p)||0};break;
           case 'cas':
@@ -48,7 +52,7 @@ async function main(){
     await input.fill('连续新增第一项');await input.press('Enter');await cb(primary,'连续新增第一项').waitFor();await input.waitFor({state:'detached'});
     await primary.getByRole('button',{name:'添加子待办 把这一周安排好',exact:true}).click();await input.waitFor();assert.equal(await input.inputValue(),'');assert.equal(await input.evaluate(el=>el===document.activeElement),true);
     await input.fill('连续新增第二项');await primary.getByLabel('子待办截止日期（可选）',{exact:true}).fill('2026-12-01');
-    const dateBox=await primary.getByLabel('子待办截止日期（可选）',{exact:true}).boundingBox(),calendarTriggerBox=await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).boundingBox();assert(calendarTriggerBox.x+calendarTriggerBox.width<=dateBox.x);
+    const dateBox=await primary.getByLabel('子待办截止日期（可选）',{exact:true}).boundingBox(),calendarTriggerBox=await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).boundingBox();assert(calendarTriggerBox.x>=dateBox.x+dateBox.width);assert(dateBox.width<160);
     await page.screenshot({path:path.join(output,'add-child.png'),fullPage:true});
     await primary.getByRole('button',{name:'选择子待办截止日期（可选）',exact:true}).click();
     await input.press('Escape');assert.equal(await input.isVisible(),true);
@@ -59,6 +63,22 @@ async function main(){
     await page.evaluate(()=>window.failTaskWrite=true);await input.press('Enter');await page.getByRole('status').filter({hasText:'模拟保存失败'}).waitFor();assert.equal(await input.inputValue(),'连续新增第二项');assert.equal(await page.evaluate(()=>files.get('tasks.md')),before);
     await page.evaluate(()=>window.failTaskWrite=false);await input.press('Enter');await cb(primary,'连续新增第二项').waitFor();assert.match(await page.evaluate(()=>files.get('tasks.md')),/连续新增第二项.*📅 2026-12-01/);
     await input.waitFor({state:'detached'});await page.screenshot({path:path.join(output,'expanded.png'),fullPage:true});
+    // A slow note adapter must never leave any existing task card blank while loading.
+    await page.evaluate(()=>{
+      window.readDelayMs=100;window.emptyTaskFrames=[];window.monitorFrames=true;
+      window.unchangedTaskNodes=['life','separate'].map(id=>document.querySelector('[data-widget-id="'+id+'"] .hw-task-list'));
+      const monitor=()=>{if(!window.monitorFrames)return;for(const card of document.querySelectorAll('[data-widget-type="tasks"]'))if(!card.querySelector('.hw-task-list'))emptyTaskFrames.push(card.dataset.widgetId);requestAnimationFrame(monitor);};requestAnimationFrame(monitor);
+    });
+    await cb(primary,'读完第一章，记下三个问题').check();
+    await page.waitForFunction(()=>Array.from(document.querySelectorAll('[data-widget-id="mirror"] .hw-task-child .hw-task-title')).at(-1)?.textContent==='读完第一章，记下三个问题');
+    assert.deepEqual(await primary.locator('.hw-task-child .hw-task-title').allTextContents(),['整理学习资料','连续新增第一项','连续新增第二项','读完第一章，记下三个问题']);
+    assert.equal(await page.evaluate(()=>unchangedTaskNodes.every((node,index)=>node===document.querySelector('[data-widget-id="'+['life','separate'][index]+'"] .hw-task-list'))),true);
+    await cb(primary,'读完第一章，记下三个问题').uncheck();await page.waitForFunction(()=>!document.querySelector('[data-widget-id="mirror"] input[aria-label="读完第一章，记下三个问题"]')?.checked);
+    await page.evaluate(()=>{window.monitorFrames=false;window.readDelayMs=0;});assert.deepEqual(await page.evaluate(()=>emptyTaskFrames),[]);
+    await page.evaluate(()=>{window.taskListBeforeReadFailure=document.querySelector('[data-widget-id="primary"] .hw-task-list');window.failTaskRead=true;});
+    await cb(primary,'读完第一章，记下三个问题').check();await page.getByRole('status').filter({hasText:'模拟读取失败'}).waitFor();
+    await page.waitForFunction(()=>{const box=document.querySelector('[data-widget-id="primary"] input[aria-label="读完第一章，记下三个问题"]');return box&&!box.disabled&&!box.checked;});
+    assert.equal(await page.evaluate(()=>taskListBeforeReadFailure===document.querySelector('[data-widget-id="primary"] .hw-task-list')),true);await page.evaluate(()=>window.failTaskRead=false);
     await primary.getByRole('button',{name:'隐藏已完成待办 整理学习资料',exact:true}).click();await cb(primary,'整理学习资料').waitFor({state:'detached'});assert.equal(await primary.locator('.hw-task-group-progress').textContent(),'1/4');
     await cb(primary,'把这一周安排好').check();await primary.getByRole('button',{name:'隐藏已完成待办 把这一周安排好',exact:true}).waitFor();assert.equal(await primary.locator('.hw-task-group-progress').textContent(),'4/4');
     await primary.getByRole('button',{name:'隐藏已完成待办 把这一周安排好',exact:true}).click();await cb(primary,'把这一周安排好').waitFor({state:'detached'});assert.equal(await primary.locator('.hw-task-hidden-count').textContent(),'1');
@@ -87,7 +107,7 @@ async function main(){
     }
     await page.screenshot({path:path.join(output,'narrow.png'),fullPage:true});
     await page.emulateMedia({colorScheme:'dark'});await page.evaluate(()=>{document.body.classList.remove('theme-light');document.body.classList.add('theme-dark');});await page.screenshot({path:path.join(output,'dark.png'),fullPage:true});
-    assert.deepEqual(errors,[]);console.log(JSON.stringify({screenshots:output,checks:['leaf totals','fold persistence and instance isolation','save closes editor and next add is manual','calendar icon left of date','IME Enter','failed save preserves draft','independent child date','child and group hiding','reopen clears mirror hides','bidirectional completion','keyboard sort and focus','pointer sorting and drop marker','Esc cancels drag','group limit','multiline checkbox alignment at two font sizes','390px and dark mode'],pageErrors:errors}));
+    assert.deepEqual(errors,[]);console.log(JSON.stringify({screenshots:output,checks:['leaf totals','fold persistence and instance isolation','save closes editor and next add is manual','compact date and calendar icon on the right','IME Enter','failed save preserves draft','completed child moves to group end','slow reads never show blank task cards','unrelated categories preserve DOM','failed read retains content and restores checkbox','independent child date','child and group hiding','reopen clears mirror hides','bidirectional completion','keyboard sort and focus','pointer sorting and drop marker','Esc cancels drag','group limit','multiline checkbox alignment at two font sizes','390px and dark mode'],pageErrors:errors}));
   }finally{await browser.close();}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -34,16 +34,26 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
     record.tools.append(grip,button(doc,'↑',()=>run(()=>store.move(item.id,-1)),{class:'hw-button hw-icon-button','aria-label':'上移'+label}),button(doc,'↓',()=>run(()=>store.move(item.id,1)),{class:'hw-button hw-icon-button','aria-label':'下移'+label}),button(doc,'⚙',()=>configure(item),{class:'hw-button hw-icon-button','aria-label':'设置'+label}));
     record.tools.append(button(doc,icon(doc,'hide'),()=>run(()=>store.patchWidget(item.id,{hidden:true})),{class:'hw-button hw-icon-button','aria-label':'隐藏'+label}),button(doc,icon(doc,'trash'),()=>run(()=>confirmRemoveWidget(forms,store,item,{draft:editing,isActive:()=>!lifetime.signal.aborted})),{class:'hw-button hw-icon-button hw-widget-delete','aria-label':'删除实例 '+label}));
   }
-  function disposeRecord(record){record.life?.dispose();record.toolsLife?.dispose();record.el.remove();records.delete(record.item.id);}
-  async function refreshWidget(record) {
+  function disposeRecord(record){record.preparing?.dispose();record.life?.dispose();record.toolsLife?.dispose();record.el.remove();records.delete(record.item.id);}
+  function refreshWidget(record){
+    if(record.refreshing){record.refreshAgain=true;return record.refreshing;}
+    const job=(async()=>{do{record.refreshAgain=false;await renderWidget(record);}while(record.refreshAgain&&!lifetime.signal.aborted&&records.get(record.item.id)===record);})();
+    record.refreshing=job;job.finally(()=>{if(record.refreshing===job)record.refreshing=null;});return job;
+  }
+  async function renderWidget(record) {
     const {item,def,body,actions}=record;
     record.pending=false;
-    record.life?.dispose();record.life=new Lifetime();const life=record.life;
-    body.replaceChildren();actions.replaceChildren();
-    if(!def){body.append(empty(doc,'尚未注册组件类型：'+item.type+'。配置已保留。'));return;}
+    const previous=record.life,life=new Lifetime();record.preparing=life;
+    let started=false,scrollTop=body.scrollTop;
+    const beginRender=()=>{
+      if(started||life.signal.aborted)return;started=true;scrollTop=body.scrollTop;
+      previous?.dispose();record.life=life;body.replaceChildren();actions.replaceChildren();
+    };
+    if(!def?.deferRender)beginRender();
+    if(!def){body.append(empty(doc,'尚未注册组件类型：'+item.type+'。配置已保留。'));record.preparing=null;return;}
     const config={...def.defaults,...item.settings};
     if(!locals.has(item.id))locals.set(item.id,{});
-    const ctx={id:item.id,config,el:body,actions,doc,services,platform,sourcePath,forms,notify,local:locals.get(item.id),lifetime:life,signal:life.signal,
+    const ctx={id:item.id,config,el:body,actions,doc,services,platform,sourcePath,forms,notify,local:locals.get(item.id),lifetime:life,signal:life.signal,beginRender,
       refresh:()=>{if(!life.signal.aborted)return refreshWidget(record);},
       updateConfig:patch=>store.patchSettings(item.id,patch),
       run:fn=>run(fn)
@@ -57,7 +67,14 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
     for(const topic of def.watch?.(config)||[])watcher(topic);
     life.listen(body,'focusout',()=>{queueMicrotask(()=>{if(record.pending&&!body.contains(doc.activeElement)&&!life.signal.aborted){record.pending=false;refreshWidget(record);}});});
     try{const cleanup=await def.mount(ctx);if(typeof cleanup==='function')life.own(cleanup);}
-    catch(e){if(!life.signal.aborted){body.replaceChildren(empty(doc,'此组件暂时无法显示：'+e.message));body.append(button(doc,'重试',()=>refreshWidget(record)));}}
+    catch(e){if(!life.signal.aborted){
+      if(def.deferRender&&!started&&previous)notify('更新'+item.title+'失败：'+e.message,true);
+      else{beginRender();body.replaceChildren(empty(doc,'此组件暂时无法显示：'+e.message));body.append(button(doc,'重试',()=>refreshWidget(record)));}
+    }}
+    finally{
+      if(started)body.scrollTop=scrollTop;else life.dispose();
+      if(record.preparing===life)record.preparing=null;
+    }
   }
   function mount(item) {
     const def=registry.get(item.type),el=element(doc,'section',{class:'hw-widget'+(def?.frameless?' hw-frameless':'')+(!hasWidgetFrame(def)?' hw-frame-none':''),'data-widget-id':item.id,'data-widget-type':item.type,'aria-label':item.title});

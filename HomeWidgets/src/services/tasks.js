@@ -72,6 +72,12 @@ function rootToEnd(text,id,source){
   const last=tasks.filter(task=>task.parentLine===null&&task.area===root.area&&task.done===root.done&&task.id!==id).at(-1);
   return last?moveBlock(text.split('\n'),root.line,last.line,true).join('\n'):text;
 }
+function childToEnd(text,id,source){
+  const tasks=parseTasks(text,source),child=tasks.find(task=>task.id===id);
+  if(!child||child.parentLine===null)return text;
+  const last=tasks.filter(task=>task.parentLine===child.parentLine).at(-1);
+  return last&&last!==child?moveBlock(text.split('\n'),child.line,last.line,true).join('\n'):text;
+}
 function createTaskService(io,integrations){
   const reopenHandlers=new Set();
   const clearHidden=async(source,tasks)=>{const ids=tasks.map(task=>blockId(task.raw)).filter(Boolean);if(ids.length)for(const handler of reopenHandlers)await handler(source,ids);};
@@ -144,15 +150,17 @@ function createTaskService(io,integrations){
       await update(task.source,text=>{
         const fresh=checkedGroup(text,task),lines=fresh.lines,offset=fresh.group[0].line-root.line;
         const id=blockId(root.raw)||'hw-'+crypto.randomUUID(),seen=new Set(fresh.tasks.filter(item=>!changes.has(item.line-offset)).map(item=>blockId(item.raw)).filter(Boolean));
+        const completedChild=done&&current.task.parentLine!==null?current.task:null,childId=completedChild&&(blockId(completedChild.raw)||'hw-'+crypto.randomUUID());
         for(const item of [...group].reverse()){
           if(!results.has(item.line))continue;let result=results.get(item.line);
-          if(item===root&&!blockId(item.raw)){
-            const parts=result.split('\n');parts[0]=parts[0].trimEnd()+' ^'+id+(item.raw.endsWith('\r')?'\r':'');result=parts.join('\n');
+          if((item===root||item===completedChild)&&!blockId(item.raw)){
+            const parts=result.split('\n');parts[0]=parts[0].trimEnd()+' ^'+(item===root?id:childId)+(item.raw.endsWith('\r')?'\r':'');result=parts.join('\n');
           }
           result=result.split('\n').map(line=>line.replace(/ \^([\w-]+)([ \t]*\r?)$/,(_,old,ending)=>{const next=seen.has(old)?'hw-'+crypto.randomUUID():old;seen.add(next);return ' ^'+next+ending;})).join('\n');
           lines.splice(item.line+offset,1,result);
         }
-        return changes.has(root.line)?rootToEnd(lines.join('\n'),id,task.source):lines.join('\n');
+        const next=completedChild?childToEnd(lines.join('\n'),childId,task.source):lines.join('\n');
+        return changes.has(root.line)?rootToEnd(next,id,task.source):next;
       });
     },
     async move(task,target,after=false){

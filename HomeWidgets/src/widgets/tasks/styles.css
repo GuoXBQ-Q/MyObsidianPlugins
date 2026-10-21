@@ -52,9 +52,9 @@
 .hw-home [data-widget-type="tasks"] .hw-task-child-editor{display:grid;gap:7px;margin:8px 4px 12px 28px;padding:10px;border:1px solid var(--hw-line);border-radius:8px;background:var(--hw-panel)}
 .hw-home [data-widget-type="tasks"] .hw-task-child-input{width:100%;min-width:0;font:inherit}
 .hw-home [data-widget-type="tasks"] .hw-task-child-editor-tools{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.hw-home [data-widget-type="tasks"] .hw-task-child-editor-tools>.hw-date{flex:1;min-width:170px}
+.hw-home [data-widget-type="tasks"] .hw-task-child-editor-tools>.hw-date{flex:0 1 175px;min-width:0;max-width:100%}
 .hw-home [data-widget-type="tasks"] .hw-task-child-editor .hw-date-field{display:flex;align-items:center;gap:6px}
-.hw-home [data-widget-type="tasks"] .hw-task-child-editor .hw-date-trigger{position:static;order:-1;flex:0 0 30px;transform:none}
+.hw-home [data-widget-type="tasks"] .hw-task-child-editor .hw-date-trigger{position:static;flex:0 0 30px;transform:none}
 .hw-home [data-widget-type="tasks"] .hw-task-child-editor .hw-date-input{flex:1;width:100%;min-width:0}
 .hw-home [data-widget-type="tasks"] .hw-task-child-save,.hw-home [data-widget-type="tasks"] .hw-task-child-cancel{padding:4px 7px;font-size:11px}
 @container home-widgets (max-width:480px){

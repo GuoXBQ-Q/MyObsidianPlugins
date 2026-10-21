@@ -31,7 +31,7 @@ async function fixture(text){
     controllers.get(id)?.abort();const controller=new AbortController();controllers.set(id,controller);
     const saved=(await store.load()).widgets.find(item=>item.id===id),body=new Node('body'),actions=new Node('header');
     if(!locals.has(id))locals.set(id,{});
-    const ctx={doc,el:body,actions,config:{...widget.defaults,...saved.settings},local:locals.get(id),signal:controller.signal,
+    const ctx={doc,el:body,actions,config:{...widget.defaults,...saved.settings},local:locals.get(id),signal:controller.signal,beginRender(){},
       services:{tasks:service},updateConfig:patch=>store.patchSettings(id,patch),refresh:()=>mount(id),
       forms:{show:(...args)=>dialogs.push({kind:'edit',args}),confirm:(...args)=>dialogs.push({kind:'delete',args})},
       notify:text=>notices.push(text),run:async fn=>{try{return await fn();}catch(e){notices.push(e.message);}}};
@@ -140,4 +140,13 @@ test('row edit and delete controls open forms and require confirmation before ch
 test('invalid cross-category child groups show a warning in both categories instead of disappearing',async()=>{
   const f=await fixture('- [ ] 工作父项 #area/work ^parent\n  - [ ] 生活子项 #area/life ^child\n');
   for(const id of ['work-a','life']){const view=await f.mount(id);assert.deepEqual(titles(view),['工作父项','生活子项']);assert.match(view.body.textContent,/同一分类/);assert(view.body.find('hw-task-main').every(main=>main.children[0].disabled));}
+});
+
+test('an unrelated category change preserves DOM while rebasing handlers for duplicate plain tasks',async()=>{
+  const f=await fixture('- [ ] 同名 #area/work\n- [ ] 同名 #area/work\n'),view=await f.mount(),before=view.body.children[0];let began=false;
+  f.files.set(f.source,'- [ ] 新增生活 #area/life ^life\n'+f.files.get(f.source));
+  await widget.mount({...view.ctx,signal:new AbortController().signal,beginRender(){began=true;}});
+  assert.equal(began,false);assert.equal(view.body.children[0],before);
+  const input=view.body.find('hw-task-main')[1].children[0];input.checked=true;await input.events.change();
+  const tasks=await f.service.list(f.source,'work');assert(!tasks[0].done);assert(tasks[1].done);assert(!f.notices.some(text=>/已被修改/.test(text)));
 });

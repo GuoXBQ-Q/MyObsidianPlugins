@@ -7,12 +7,21 @@ const {createTaskDrag}=require('./drag');
 const keys=(settings,name)=>Array.isArray(settings[name])?settings[name].filter(key=>typeof key==='string'):[];
 const taskKey=task=>JSON.stringify([task.source,task.id]);
 const baseRaw=raw=>raw.replace(/ \^[\w-]+\s*$/,'').trimEnd();
-module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),span:4,defaults:{source:'Home/待办.md',area:'work',showCompleted:true,limit:20},
+module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),span:4,deferRender:true,defaults:{source:'Home/待办.md',area:'work',showCompleted:true,limit:20},
   fields:[{key:'source',label:'待办笔记路径',required:true},{key:'area',label:'分类标签后缀，例如 work、life、study',required:true},{key:'showCompleted',label:'显示已完成任务',type:'checkbox'},{key:'limit',label:'最多显示主待办组数',type:'number',min:1,max:200}],
   watch:c=>['file:'+c.source,'integrations'],
   async mount(ctx){
     const c=ctx.config,all=await ctx.services.tasks.list(c.source);if(ctx.signal.aborted)return;
     const roots=all.filter(task=>task.parentLine===null&&(task.area===c.area||groupFor(all,task).some(child=>child.area===c.area))),groups=new Map(roots.map(root=>[root.id,groupFor(all,root)]));
+    const models=roots.flatMap(root=>groups.get(root.id)),editor=ctx.local.childEditor;
+    const signature=JSON.stringify([c,roots.map(root=>groups.get(root.id).map(task=>task.raw)),editor&&[editor.source,editor.parentId,editor.title,editor.due]]);
+    const previous=ctx.local.taskRendered;
+    if(previous&&!previous.signal.aborted&&previous.signature===signature&&!ctx.local.taskFocus){
+      // Preserve DOM and listeners for unrelated file edits, but rebase each event
+      // handler's task snapshot/line so its next mutation still checks current data.
+      previous.models.forEach((task,index)=>Object.assign(task,models[index]));return;
+    }
+    ctx.beginRender();
     const tasks=all.filter(task=>task.area===c.area),leaves=leafTasks(tasks),hidden=new Set(keys(c,'hiddenTaskKeys')),collapsed=new Set(keys(c,'collapsedTaskKeys'));
     const hiddenCount=roots.reduce((count,root)=>count+(root.done&&hidden.has(taskKey(root))?1:groups.get(root.id).slice(1).filter(task=>task.done&&hidden.has(taskKey(task))).length),0);
     const completed=leaves.filter(task=>task.done).length,remaining=leaves.length-completed,entries=[];
@@ -63,7 +72,12 @@ module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),sp
       input.disabled=!!error;
       if(task.due){let suffix='';try{if(!task.done&&daysUntil(task.due)<0)suffix=' · 已逾期';}catch{suffix=' · 日期无效';}copy.append(element(ctx.doc,'small',{},task.due.slice(5).replace('-',' / ')+suffix));}
       const main=element(ctx.doc,'label',{class:'hw-task-main'},input,copy);row.append(main);
-      input.addEventListener('change',()=>{input.disabled=true;return ctx.run(async()=>{await ctx.services.tasks.toggle(task,input.checked);ctx.notify('任务已更新');}).finally(refresh);});
+      input.addEventListener('change',()=>{
+        input.disabled=true;let saved=false;
+        return ctx.run(async()=>{await ctx.services.tasks.toggle(task,input.checked);saved=true;ctx.notify('任务已更新');}).finally(async()=>{
+          try{await refresh();}finally{if(!ctx.signal.aborted){input.disabled=!!error;if(!saved)input.checked=task.done;}}
+        });
+      });
       if(!isChild&&group.length>1)row.append(element(ctx.doc,'span',{class:'hw-task-group-progress','aria-label':'子待办已完成 '+group.slice(1).filter(item=>item.done).length+' / '+(group.length-1)},group.slice(1).filter(item=>item.done).length+'/'+(group.length-1)));
       const actions=element(ctx.doc,'div',{class:'hw-task-row-actions'});
       if(!isChild&&!task.recurring&&!error){
@@ -123,5 +137,6 @@ module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),sp
     const add=()=>ctx.forms.show('添加待办',[{key:'title',label:'要做的事',required:true},{key:'due',label:'截止日期（可选）',type:'date'}],{},value=>ctx.services.tasks.add(c.source,{...value,area:c.area}),'添加待办');
     ctx.actions.append(button(ctx.doc,'＋ 添加待办',add,{class:'hw-button hw-task-add'}));ctx.el.append(list);
     createTaskDrag({list,doc:ctx.doc,entries,onMove:move,onError:error=>ctx.notify(error.message),signal:ctx.signal});
+    ctx.local.taskRendered={signature,models,signal:ctx.signal};
   }
 };

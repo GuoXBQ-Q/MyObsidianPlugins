@@ -54,6 +54,8 @@ export interface WidgetContext<T> {
   actions: HTMLElement;  // optional header actions
   sourcePath: string;
   signal: AbortSignal;
+  /** With deferRender, call only after async loading, immediately before synchronous DOM changes. */
+  beginRender(): void;
   lifetime: Lifetime;
   local: Record<string, unknown>; // ephemeral state keyed by instance ID
   services: { io: any; bus: any; tasks: any; events: any; ideas: any; quotes: any; integrations: any; activity: any };
@@ -80,5 +82,7 @@ export interface WidgetDefinition<T = Record<string, unknown>> {
   defaults: T;
   fields?: WidgetField[];
   watch?(settings: T): string[]; // file:<path>, folder:<path>, integrations
+  /** Keep the previous content/lifetime until mount calls context.beginRender(). */
+  deferRender?: boolean;
   mount(context: WidgetContext<T>): void | (() => void) | Promise<void | (() => void)>;
 }

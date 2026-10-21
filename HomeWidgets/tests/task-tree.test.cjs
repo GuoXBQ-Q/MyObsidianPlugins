@@ -86,3 +86,17 @@ test('using an existing stable identity never rewrites or reorganizes a note jus
   f.io.update=async(p,fn)=>{if(p===source)writes++;return update(p,fn);};
   assert.equal(await f.service.ensureId(await f.get('p')),'p');assert.equal(writes,0);assert.equal(f.files.get(source),text);
 });
+
+test('completing an individual child moves its complete block to the end, and reopening retains that order',async()=>{
+  const text='- [ ] 父 #area/work ^p\r\n  - [ ] A ^a\r\n    A 的说明\r\n  - [ ] B ^b\r\n  - [x] C ^c\r\n- [ ] 邻居 #area/work ^other\r\n',f=fixture(text);
+  await f.service.toggle(await f.get('a'),true);assert.deepEqual((await f.list()).filter(t=>t.parentId==='p').map(t=>t.id),['b','c','a']);
+  assert(f.files.get(source).includes('^a\r\n    A 的说明\r\n'));assert(!(await f.get('p')).done);
+  await f.service.toggle(await f.get('a'),false);assert.deepEqual((await f.list()).filter(t=>t.parentId==='p').map(t=>t.id),['b','c','a']);
+  await f.service.toggle(await f.get('p'),true);assert.deepEqual((await f.list()).filter(t=>t.parentId==='p').map(t=>t.id),['b','c','a']);
+});
+
+test('finishing an unidentified first child assigns identity and moves it without detaching descriptions',async()=>{
+  const f=fixture('- [ ] 父 #area/work ^p\n  - [ ] 同名\n    描述一\n  - [ ] 同名\n    描述二\n');
+  await f.service.toggle((await f.list())[1],true);const children=(await f.list()).slice(1);assert(!children[0].done);assert(children[1].done);assert(children[1].id.startsWith('hw-'));
+  assert.match(f.files.get(source),/  - \[ \] 同名\n    描述二\n  - \[x\] 同名[^\n]*\n    描述一\n/);
+});
