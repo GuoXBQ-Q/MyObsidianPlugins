@@ -18,6 +18,16 @@ function createLayoutEditSession(persisted){
     discard:()=>enqueue(()=>{base=null;draft=null;removals.clear();changed();}),
     describeTaskRemoval:id=>enqueue(()=>persisted.describeTaskRemoval(id,draft?clone(draft):undefined)),
     remove:(id,plan)=>enqueue(async()=>{await (draft?memory:persisted).remove(id,draft?undefined:plan);if(draft&&plan)removals.set(id,clone(plan));}),
+    // Completion changes are saved immediately, even while the layout is a draft.
+    // Sanitize base and draft as well so discarding/merging cannot resurrect old hides.
+    clearTaskHidden:(source,ids)=>enqueue(async()=>{
+      await persisted.clearTaskHidden(source,ids);
+      if(draft){
+        const keys=new Set(ids.map(id=>JSON.stringify([source,id])));
+        for(const data of [base,draft])for(const item of data.widgets)if(item.type==='tasks'&&Array.isArray(item.settings?.hiddenTaskKeys))item.settings.hiddenTaskKeys=item.settings.hiddenTaskKeys.filter(key=>!keys.has(key));
+        changed();
+      }
+    }),
     dispose:()=>{disposed=true;base=null;draft=null;removals.clear();},
     get active(){return draft!==null;}
   };

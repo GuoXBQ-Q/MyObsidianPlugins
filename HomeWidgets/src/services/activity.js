@@ -1,4 +1,4 @@
-const {parseTasks}=require('./tasks');
+const {parseTasks,leafTasks}=require('./tasks');
 const {assertFields}=require('../core/format');
 function dateKey(date=new Date()) {return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
 function validDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const d=new Date(value+'T12:00:00');return Number.isFinite(d.getTime())&&dateKey(d)===value;}
@@ -26,7 +26,7 @@ function createActivityService(io,bus){
   registerSource({id:'tasks',label:'任务完成',unit:'项已完成',legend:'项 / 天',async load({config,signal}){
     const source=config.taskSource||'Home/待办.md';if(!await io.exists(source))return {values:[],note:'待办笔记不存在，请在组件设置中选择来源'};
     const text=await io.read(source);if(signal?.aborted)return {values:[]};let undated=0;const values=[];
-    for(const task of parseTasks(text,source)){
+    for(const task of leafTasks(parseTasks(text,source))){
       if(!task.done)continue;
       const date=task.raw.match(/(?:✅\s*|\[completion::\s*)(\d{4}-\d{2}-\d{2})/)?.[1];
       if(!validDate(date)){undated++;continue;}values.push({date,value:1});

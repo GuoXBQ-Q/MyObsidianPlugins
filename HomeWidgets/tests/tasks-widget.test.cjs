@@ -13,9 +13,12 @@ class Node {
   append(...nodes){this.childNodes.push(...nodes);}
   setAttribute(name,value){this.attributes[name]=String(value);}
   addEventListener(name,fn){this.events[name]=fn;}
+  removeEventListener(name,fn){if(this.events[name]===fn)delete this.events[name];}
+  get classList(){return {add:()=>{},remove:()=>{}};}
+  focus(){doc.activeElement=this;}
   find(cls){return this.children.flatMap(node=>[...(node.className?.split(' ').includes(cls)?[node]:[]),...node.find(cls)]);}
 }
-const doc={createElement:tag=>new Node(tag),createElementNS:(ns,tag)=>new Node(tag),createTextNode:text=>({nodeType:3,textContent:text})};
+const doc={createElement:tag=>new Node(tag),createElementNS:(ns,tag)=>new Node(tag),createTextNode:text=>({nodeType:3,textContent:text}),addEventListener(){},removeEventListener(){},defaultView:{addEventListener(){},removeEventListener(){}}};
 async function fixture(text){
   const source='Home/tasks.md',layoutPath='Home/widgets.json',bus=new Bus(),queues=new Map(),notices=[],dialogs=[];
   const files=new Map([[source,text],[layoutPath,JSON.stringify({version:2,theme:'native',widgets:['work-a','work-b','life'].map(id=>({id,type:'tasks',title:id,span:4,settings:{source,area:id==='life'?'life':'work'}}))})]]);
@@ -23,6 +26,7 @@ async function fixture(text){
     const job=(queues.get(path)||Promise.resolve()).catch(()=>{}).then(()=>files.set(path,fn(files.get(path))));queues.set(path,job);await job;
   }};
   const store=createLayoutStore(io,bus),service=createTaskService(io),locals=new Map(),controllers=new Map();
+  service.onReopen((source,ids)=>store.clearTaskHidden(source,ids));
   async function mount(id='work-a'){
     controllers.get(id)?.abort();const controller=new AbortController();controllers.set(id,controller);
     const saved=(await store.load()).widgets.find(item=>item.id===id),body=new Node('body'),actions=new Node('header');
@@ -131,4 +135,9 @@ test('row edit and delete controls open forms and require confirmation before ch
   await edit.args[3]({title:'已修正的任务',due:'2026-12-01'});let fresh=await f.mount();assert.deepEqual(titles(fresh),['已修正的任务','完成 A','完成 B']);
   const edited=f.files.get(f.source);fresh.body.find('hw-task-delete')[0].events.click();const confirm=f.dialogs.pop();assert.equal(confirm.kind,'delete');assert.equal(confirm.args[1].content,'已修正的任务');assert.equal(f.files.get(f.source),edited);
   await confirm.args[2]();fresh=await f.mount();assert.deepEqual(titles(fresh),['完成 A','完成 B']);assert.deepEqual(titles(await f.mount('work-b')),['完成 A','完成 B']);assert.deepEqual(titles(await f.mount('life')),['生活事项']);
+});
+
+test('invalid cross-category child groups show a warning in both categories instead of disappearing',async()=>{
+  const f=await fixture('- [ ] 工作父项 #area/work ^parent\n  - [ ] 生活子项 #area/life ^child\n');
+  for(const id of ['work-a','life']){const view=await f.mount(id);assert.deepEqual(titles(view),['工作父项','生活子项']);assert.match(view.body.textContent,/同一分类/);assert(view.body.find('hw-task-main').every(main=>main.children[0].disabled));}
 });

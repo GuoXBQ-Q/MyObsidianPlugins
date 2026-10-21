@@ -53,6 +53,11 @@ function createLayoutStore(io,bus,path=DEFAULT_PATH) {
     async initialize(){if(await io.exists(path))return load();const next={version:2,theme:'native',widgets:[]};await io.create(path,JSON.stringify(next,null,2)+'\n');return next;},
     patchWidget:(id,patch)=>change(data=>({...data,widgets:data.widgets.map(w=>w.id===id?{...w,...patch,settings:patch.settings?{...w.settings,...patch.settings}:w.settings}:w)})),
     patchSettings:(id,patch)=>change(data=>({...data,widgets:data.widgets.map(w=>w.id===id?{...w,settings:{...w.settings,...(typeof patch==='function'?patch(w.settings||{}):patch)}}:w)})),
+    async clearTaskHidden(source,ids){
+      const keys=new Set(ids.map(id=>JSON.stringify([source,id]))),current=await load();
+      if(!current.widgets.some(w=>w.type==='tasks'&&w.settings?.hiddenTaskKeys?.some(key=>keys.has(key))))return;
+      await change(data=>({...data,widgets:data.widgets.map(w=>w.type==='tasks'&&Array.isArray(w.settings?.hiddenTaskKeys)?{...w,settings:{...w.settings,hiddenTaskKeys:w.settings.hiddenTaskKeys.filter(key=>!keys.has(key))}}:w)}));
+    },
     add:widget=>change(data=>({...data,widgets:[...data.widgets,widget]})),
     remove:(id,plan)=>change(data=>{
       const item=data.widgets.find(w=>w.id===id);

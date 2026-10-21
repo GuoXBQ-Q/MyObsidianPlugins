@@ -60,6 +60,6 @@ function createDatePicker(doc,{id,name,label}){
     trigger.setAttribute('aria-expanded','true');doc.addEventListener('click',outside,true);doc.addEventListener('scroll',onScroll,true);win.addEventListener('resize',place);
   }
   root.addEventListener('keydown',event=>{if(event.key==='Escape'&&!calendar.hidden){event.preventDefault();event.stopPropagation();close();trigger.focus();}});
-  return {root,input,dispose(){disposed=true;close();}};
+  return {root,input,close,isOpen:()=>!calendar.hidden,dispose(){disposed=true;close();}};
 }
 module.exports={createDatePicker};

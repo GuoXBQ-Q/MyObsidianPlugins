@@ -44,7 +44,7 @@ test('task sections stay organized after adding, completing, restoring and remov
   const prefix='# 待办\n说明保留\n<!-- home-widgets:tasks -->',suffix='<!-- /home-widgets:tasks -->\n后记保留\n';
   const {files,io}=fixture({'tasks.md':prefix+'\n## 工作\n### 未完成\n- [ ] 工作任务 #area/work ^work\n  说明\n  - [ ] 子项 #area/work ^child\n## 生活\n### 未完成\n- [ ] 生活任务 #area/life ^life\n'+suffix}),service=createTaskService(io);
   let task=(await service.list('tasks.md','work'))[0];await service.toggle(task,true);let text=files.get('tasks.md');
-  assert(text.startsWith(prefix));assert(text.endsWith(suffix));const work=text.slice(text.indexOf('## 工作'),text.indexOf('## 生活'));assert(work.indexOf('工作任务')>work.indexOf('### 已完成'));assert.match(work,/  说明\n  - \[ \] 子项/);
+  assert(text.startsWith(prefix));assert(text.endsWith(suffix));const work=text.slice(text.indexOf('## 工作'),text.indexOf('## 生活'));assert(work.indexOf('工作任务')>work.indexOf('### 已完成'));assert.match(work,/  说明\n  - \[x\] 子项/);
   await service.add('tasks.md',{title:'新增生活任务',area:'life'});text=files.get('tasks.md');assert(text.indexOf('新增生活任务')<text.indexOf(suffix));assert(text.indexOf('新增生活任务')>text.indexOf('## 生活'));
   task=(await service.list('tasks.md','work'))[0];await service.toggle(task,false);text=files.get('tasks.md');assert(text.indexOf('工作任务')<text.indexOf('### 已完成'));
   const changed=transformCategories(text,[{source:'tasks.md',area:'work',mode:'uncategorize'}]);assert(changed.indexOf('工作任务')>changed.indexOf('## 未分类'));assert(changed.endsWith(suffix));assert.match(changed,/  说明\n  - \[ \] 子项 #area\/uncategorized/);

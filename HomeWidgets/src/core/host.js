@@ -13,6 +13,7 @@ const editOwners=new WeakMap();
 function createHost(container,{registry,store,services,platform={},sourcePath='homepage.md'}) {
   store=createLayoutEditSession(store);
   const doc=container.ownerDocument,lifetime=new Lifetime(),records=new Map(),locals=new Map();
+  lifetime.own(services.tasks.onReopen((source,ids)=>store.clearTaskHidden(source,ids)));
   const root=element(doc,'div',{class:'hw-home','data-home-widgets':'true'}),bar=element(doc,'header',{class:'hw-topbar'}),toolbar=element(doc,'div',{class:'hw-toolbar'});
   bar.append(element(doc,'div',{class:'hw-brand'},'❖  HOME WIDGETS',element(doc,'span',{},' /  My little universe')),toolbar);
   const toast=element(doc,'div',{class:'hw-toast',role:'status','aria-live':'polite'}),grid=element(doc,'div',{class:'hw-grid'});
@@ -36,6 +37,7 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
   function disposeRecord(record){record.life?.dispose();record.toolsLife?.dispose();record.el.remove();records.delete(record.item.id);}
   async function refreshWidget(record) {
     const {item,def,body,actions}=record;
+    record.pending=false;
     record.life?.dispose();record.life=new Lifetime();const life=record.life;
     body.replaceChildren();actions.replaceChildren();
     if(!def){body.append(empty(doc,'尚未注册组件类型：'+item.type+'。配置已保留。'));return;}
