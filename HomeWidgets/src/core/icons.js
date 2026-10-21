@@ -6,6 +6,7 @@ function icon(doc,name){
   paths.hide=['M3 3l18 18','M10.6 10.6a2 2 0 0 0 2.8 2.8','M9.9 5.2A11 11 0 0 1 12 5c6 0 10 7 10 7a16 16 0 0 1-3 4','M6.4 6.4C3.5 8.5 2 12 2 12s4 7 10 7c2 0 3.8-.8 5.3-1.7'];
   paths.hourglass=['M5 3h14M5 21h14','M6 3v4c0 2 3 4 6 5-3 1-6 3-6 5v4M18 3v4c0 2-3 4-6 5 3 1 6 3 6 5v4'];
   paths.plus=['M12 5v14M5 12h14'];
+  paths.archive=['M3 3h18v4H3V3Z','M5 7v14h14V7','M10 11h4'];
   paths.pin=['M9 3h6M10 3v6l-4 5v2h12v-2l-4-5V3M12 16v5'];
   paths.coffee=['M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z','M17 10h2a3 3 0 0 1 0 6h-2M7 3v3M11 2v4M15 3v3M3 22h16'];
   paths.sparkles=['m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z'];

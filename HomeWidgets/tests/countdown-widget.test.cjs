@@ -21,9 +21,9 @@ const sample=[
   {id:'event-newyear',title:'迎接新的一年',date:'2027-01-01',area:'生活'},
 ];
 async function mount(events=sample,settings={},aborted=false,local={}){
-  const el=new Node('body'),actions=new Node('header'),dialogs=[],saves=[],timers=[],confirmations=[],deletes=[],refreshes=[],patches=[],errors=[];
-  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{list:async()=>events,save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args)}},forms:{show:(...args)=>dialogs.push(args),confirm:(...args)=>confirmations.push(args)},lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
-  await widget.mount(ctx);return {ctx,el,actions,dialogs,saves,timers,confirmations,deletes,refreshes,local,patches,errors};
+  const el=new Node('body'),actions=new Node('header'),dialogs=[],saves=[],timers=[],deletes=[],archives=[],restores=[],refreshes=[],patches=[],errors=[];
+  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{list:async(source,{includeArchived=false}={})=>includeArchived?events:events.filter(e=>!e.archived),save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args),archive:async(...args)=>archives.push(args),restore:async(...args)=>restores.push(args)}},forms:{show:(...args)=>dialogs.push(args)},lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
+  await widget.mount(ctx);return {ctx,el,actions,dialogs,saves,timers,deletes,archives,restores,refreshes,local,patches,errors};
 }
 test('pinned countdown retains its date, while upcoming items precede expired dates',async()=>{
   const f=await mount(sample,{upcoming:2});
@@ -69,11 +69,34 @@ test('default list includes many dates and expired records, with no hard-coded m
 test('hero and expired rows expose separate delete controls and require confirmation before writing',async()=>{
   const f=await mount(),buttons=f.el.find('hw-countdown-delete');assert.equal(buttons.length,sample.length);
   assert.equal(f.el.find('hw-countdown-event').some(row=>row.find('hw-countdown-delete').length),false);
-  buttons[0].events.click();assert.equal(f.deletes.length,0);assert.equal(f.confirmations[0][1].content,'项目里程碑');
-  await f.confirmations[0][2]();assert.equal(f.deletes[0][0],'default');assert.equal(f.deletes[0][1].id,'event-project');assert.equal(f.refreshes.length,1);
+  buttons[0].events.click();assert.equal(f.deletes.length,0);assert.equal(f.archives.length,0);assert.equal(f.dialogs[0][5].description.content,'项目里程碑');
+  await f.dialogs[0][3]();assert.equal(f.deletes[0][0],'default');assert.equal(f.deletes[0][1].id,'event-project');assert.equal(f.refreshes.length,1);
   const expired=buttons.find(b=>b.attributes['aria-label']==='删除日期 已结束');expired.events.click();assert.equal(f.deletes.length,1);
-  await f.confirmations[1][2]();assert.equal(f.deletes[1][1].id,'event-old');
+  await f.dialogs[1][3]();assert.equal(f.deletes[1][1].id,'event-old');
   const withoutMain=await mount(sample.filter(e=>e.id!=='event-project'));assert.equal(withoutMain.el.find('hw-countdown-title')[0].textContent,'留给自己的周末');assert.equal(withoutMain.el.find('hw-countdown-pin')[0].textContent,'自动选择');assert.equal(withoutMain.patches[0].featured,'');
+});
+
+test('delete dialog offers archive without deleting, while archive failures do not refresh',async()=>{
+  const f=await mount();f.el.find('hw-countdown-delete')[0].events.click();
+  const options=f.dialogs[0][5];assert.equal(options.secondaryAction.label,'归档');
+  await options.secondaryAction.run();assert.equal(f.archives[0][0],'default');assert.equal(f.archives[0][1].id,'event-project');
+  assert.equal(f.deletes.length,0);assert.equal(f.refreshes.length,1);
+  f.ctx.services.events.archive=async()=>{throw Error('保存失败');};
+  await assert.rejects(options.secondaryAction.run(),/保存失败/);assert.equal(f.refreshes.length,1);
+});
+
+test('archived dates are excluded from hero and rows, clear old pins and can be restored from an empty widget',async()=>{
+  const events=sample.map(e=>({...e,archived:e.id==='event-project'})),f=await mount(events);
+  assert.equal(f.patches[0].featured,'');assert.equal(f.el.find('hw-countdown-title')[0].textContent,'留给自己的周末');
+  assert(!f.el.find('hw-countdown-event-title').some(n=>n.textContent==='项目里程碑'));
+  assert.equal(f.el.find('hw-countdown-delete').length,3);assert.equal(f.actions.find('hw-countdown-archive-count')[0].textContent,'1');
+  const empty=await mount(sample.map(e=>({...e,archived:true})));
+  assert.match(empty.el.textContent,/添加一个值得期待/);assert.equal(empty.el.find('hw-countdown-hero').length,0);
+  empty.actions.find('hw-countdown-archive')[0].events.click();const form=empty.dialogs[0];
+  assert.equal(form[0],'已归档的日子');assert.equal(form[1][0].options.length,4);assert.equal(empty.restores.length,0);
+  await form[3]({id:'event-project'});assert.equal(empty.restores[0][1].id,'event-project');assert.equal(empty.refreshes.length,1);
+  empty.ctx.services.events.restore=async()=>{throw Error('保存失败');};
+  await assert.rejects(form[3]({id:'event-old'}),/保存失败/);assert.equal(empty.refreshes.length,1);
 });
 
 test('dates can be pinned, switched and unpinned independently for each widget',async()=>{

@@ -3,6 +3,10 @@
 .hw-home [data-widget-type="countdown"].hw-fixed>.hw-widget-body{overflow:hidden}
 .hw-home [data-widget-type="countdown"] .hw-countdown-add{gap:5px;font-size:11px;color:var(--hw-accent)}
 .hw-home [data-widget-type="countdown"] .hw-countdown-add svg{width:15px;height:15px}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive{position:relative;flex-shrink:0;width:26px;height:26px;padding:5px;margin-right:7px;color:var(--hw-muted)}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive svg{width:16px;height:16px}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive:hover,.hw-home [data-widget-type="countdown"] .hw-countdown-archive:focus-visible{color:var(--hw-accent)}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive-count{position:absolute;top:-4px;right:-4px;min-width:15px;height:15px;box-sizing:border-box;padding:0 3px;border:1px solid var(--hw-panel);border-radius:999px;background:var(--hw-accent);color:var(--text-on-accent,#fff);font-size:9px;font-weight:600;line-height:13px;font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none}
 .hw-home [data-widget-type="countdown"] .hw-countdown-hero{flex:0 0 auto;padding:13px 16px 14px;border:1px solid color-mix(in srgb,var(--hw-accent) 24%,var(--hw-line));border-radius:12px;background:color-mix(in srgb,var(--hw-accent) 5%,var(--hw-panel))}
 .hw-home [data-widget-type="countdown"] .hw-countdown-meta{display:flex;align-items:center;gap:10px;min-height:23px}
 .hw-home [data-widget-type="countdown"] .hw-countdown-category{background:color-mix(in srgb,var(--hw-accent) 12%,var(--hw-panel));font-size:11px}
