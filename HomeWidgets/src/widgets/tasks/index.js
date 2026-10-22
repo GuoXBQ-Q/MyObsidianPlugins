@@ -36,7 +36,7 @@ module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),sp
     ctx.actions.append(counter);
     const restore=button(ctx.doc,'',()=>{
       restore.disabled=true;
-      return ctx.run(()=>visibilityChange(async()=>{await ctx.updateConfig({hiddenTaskKeys:[],showCompleted:true});ctx.notify('已还原隐藏待办');})).finally(refresh);
+      return ctx.run(()=>visibilityChange(async()=>{await ctx.updateConfig({hiddenTaskKeys:[],showCompleted:true,completedCollapsed:false});ctx.notify('已还原隐藏待办');})).finally(refresh);
     },{class:'hw-button hw-task-restore','aria-label':'还原此组件的全部隐藏待办','aria-description':'已隐藏 '+hiddenCount+' 项（整组计一项）'});
     const badge=element(ctx.doc,'span',{class:'hw-task-hidden-count','aria-hidden':'true'},hiddenCount);badge.hidden=hiddenCount===0;restore.append(icon(ctx.doc,'restore'),badge);restore.disabled=hiddenCount===0;ctx.actions.append(restore);
     const list=element(ctx.doc,'div',{class:'hw-task-list'}),visible=task=>!task.done||(c.showCompleted&&!hidden.has(taskKey(task)));
@@ -123,15 +123,32 @@ module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),sp
       editor.append(title,element(ctx.doc,'div',{class:'hw-task-child-editor-tools'},picker.root,save,cancel));container.append(editor);
       if(state.focus){state.focus=false;queueMicrotask(()=>{if(!ctx.signal.aborted)title.focus();});}
     }
-    let previousStatus;
+    let previousStatus,completedList;
     for(const root of visibleRoots){
-      if(previousStatus!==root.done){list.append(element(ctx.doc,'h3',{class:'hw-task-section'},root.done?'已完成':'未完成'));previousStatus=root.done;}
+      if(previousStatus!==root.done){
+        if(root.done){
+          const isCollapsed=c.completedCollapsed===true,regionId='hw-tasks-completed-'+(ctx.id||crypto.randomUUID());
+          const toggle=button(ctx.doc,'',()=>{
+            toggle.disabled=true;let saved=false;ctx.local.taskSectionFocus=true;
+            return ctx.run(()=>visibilityChange(async()=>{await ctx.updateConfig(current=>({completedCollapsed:current.completedCollapsed!==true}));saved=true;})).finally(()=>{
+              if(!saved)delete ctx.local.taskSectionFocus;
+              if(!ctx.signal.aborted){toggle.disabled=false;return refresh();}
+            });
+          },{class:'hw-button hw-task-section-toggle','aria-label':(isCollapsed?'展开':'收起')+'已完成待办','aria-expanded':String(!isCollapsed),'aria-controls':regionId});
+          toggle.append(icon(ctx.doc,'chevron'),element(ctx.doc,'span',{},'已完成'),element(ctx.doc,'span',{class:'hw-task-completed-count','aria-hidden':'true'},visibleRoots.filter(task=>task.done).length));
+          list.append(element(ctx.doc,'h3',{class:'hw-task-section hw-task-completed-heading'},toggle));
+          completedList=element(ctx.doc,'div',{class:'hw-task-completed',id:regionId});completedList.hidden=isCollapsed;list.append(completedList);
+          if(ctx.local.taskSectionFocus){delete ctx.local.taskSectionFocus;queueMicrotask(()=>{if(!ctx.signal.aborted)toggle.focus();});}
+        }
+        previousStatus=root.done;
+      }
+      if(root.done&&c.completedCollapsed===true)continue;
       const group=groups.get(root.id),container=element(ctx.doc,'div',{class:'hw-task-group','data-task-group':root.id});renderRow(root,root,group,container);
       const error=groupError(group);if(error)container.append(element(ctx.doc,'p',{class:'hw-task-warning',role:'status'},error));
       if(!collapsed.has(taskKey(root))||active?.parentId===root.id){
         const children=element(ctx.doc,'div',{class:'hw-task-children'});for(const task of group.slice(1).filter(visible))renderRow(task,root,group,children);container.append(children);
       }
-      if(active?.parentId===root.id&&!error)renderEditor(root,container,active);list.append(container);
+      if(active?.parentId===root.id&&!error)renderEditor(root,container,active);(root.done?completedList:list).append(container);
     }
     if(!visibleRoots.length)list.append(empty(ctx.doc,hiddenCount?'已隐藏 '+hiddenCount+' 条已完成待办，可在标题栏还原。':'留白也是一种从容。添加第一件事吧。'));
     const add=()=>ctx.forms.show('添加待办',[{key:'title',label:'要做的事',required:true},{key:'due',label:'截止日期（可选）',type:'date'}],{},value=>ctx.services.tasks.add(c.source,{...value,area:c.area}),'添加待办');

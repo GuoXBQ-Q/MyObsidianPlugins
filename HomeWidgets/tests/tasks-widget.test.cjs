@@ -31,7 +31,7 @@ async function fixture(text){
     controllers.get(id)?.abort();const controller=new AbortController();controllers.set(id,controller);
     const saved=(await store.load()).widgets.find(item=>item.id===id),body=new Node('body'),actions=new Node('header');
     if(!locals.has(id))locals.set(id,{});
-    const ctx={doc,el:body,actions,config:{...widget.defaults,...saved.settings},local:locals.get(id),signal:controller.signal,beginRender(){},
+    const ctx={id,doc,el:body,actions,config:{...widget.defaults,...saved.settings},local:locals.get(id),signal:controller.signal,beginRender(){},
       services:{tasks:service},updateConfig:patch=>store.patchSettings(id,patch),refresh:()=>mount(id),
       forms:{show:(...args)=>dialogs.push({kind:'edit',args}),confirm:(...args)=>dialogs.push({kind:'delete',args})},
       notify:text=>notices.push(text),run:async fn=>{try{return await fn();}catch(e){notices.push(e.message);}}};
@@ -149,4 +149,33 @@ test('an unrelated category change preserves DOM while rebasing handlers for dup
   assert.equal(began,false);assert.equal(view.body.children[0],before);
   const input=view.body.find('hw-task-main')[1].children[0];input.checked=true;await input.events.change();
   const tasks=await f.service.list(f.source,'work');assert(!tasks[0].done);assert(tasks[1].done);assert(!f.notices.some(text=>/已被修改/.test(text)));
+});
+
+test('the completed section collapses per instance, persists and leaves notes, counters and hiding untouched',async()=>{
+  const f=await fixture(sample);let view=await f.mount();const counter=view.actions.find('hw-task-counter')[0].attributes['aria-label'];
+  assert.equal(view.body.find('hw-task-section-toggle')[0].attributes['aria-expanded'],'true');
+  await view.body.find('hw-task-section-toggle')[0].events.click();view=await f.mount();
+  assert.deepEqual(titles(view),['进行中']);assert.equal(view.body.find('hw-task-section-toggle')[0].attributes['aria-expanded'],'false');assert.equal(view.body.find('hw-task-completed-count')[0].textContent,'2');
+  assert.equal(view.actions.find('hw-task-counter')[0].attributes['aria-label'],counter);assert.equal(restore(view).disabled,true);assert.equal(f.files.get(f.source),sample);
+  assert.equal((await f.store.load()).widgets[0].settings.completedCollapsed,true);assert.deepEqual(titles(await f.mount('work-b')),['进行中','完成 A','完成 B']);
+  view=await f.mount();await view.body.find('hw-task-section-toggle')[0].events.click();assert.deepEqual(titles(await f.mount()),['进行中','完成 A','完成 B']);assert.equal(f.files.get(f.source),sample);
+});
+
+test('completed section folding removes completed groups with children but retains completed children of active groups',async()=>{
+  const f=await fixture('- [ ] 进行中父项 #area/work ^p\n  - [x] 完成子项 ^a\n  - [ ] 未完成子项 ^b\n- [x] 完成父项 #area/work ^q\n  - [x] 完成组内子项 ^c\n');
+  let view=await f.mount();await view.body.find('hw-task-section-toggle')[0].events.click();view=await f.mount();
+  assert.deepEqual(titles(view),['进行中父项','完成子项','未完成子项']);
+  assert.equal(view.actions.find('hw-task-counter')[0].attributes['aria-label'],'共 3 项待办，已完成 2 项，剩余 1 项');
+  await f.service.toggle((await f.service.list(f.source)).find(task=>task.id==='b'),true);view=await f.mount();assert.deepEqual(titles(view),[]);assert.equal(view.body.find('hw-task-completed-count')[0].textContent,'2');
+  assert.equal(view.body.find('hw-empty').length,0);assert.equal(view.body.find('hw-task-section-toggle').length,1);
+});
+
+test('failed completed folding saves remain expanded and can be retried; restoring hidden tasks expands the section',async()=>{
+  const f=await fixture(sample),update=f.io.update;let fail=true;
+  f.io.update=async(path,fn)=>{if(fail&&path===f.layoutPath)throw Error('折叠保存失败');return update(path,fn);};
+  let view=await f.mount(),toggle=view.body.find('hw-task-section-toggle')[0];await toggle.events.click();assert.equal(toggle.disabled,false);
+  view=await f.mount();assert.deepEqual(titles(view),['进行中','完成 A','完成 B']);assert(f.notices.includes('折叠保存失败'));
+  fail=false;await view.body.find('hw-task-section-toggle')[0].events.click();
+  await f.store.patchSettings('work-a',{hiddenTaskKeys:[JSON.stringify([f.source,'done-a'])]});view=await f.mount();assert.equal(restore(view).disabled,false);
+  await restore(view).events.click();view=await f.mount();assert.deepEqual(titles(view),['进行中','完成 A','完成 B']);assert.equal(view.body.find('hw-task-section-toggle')[0].attributes['aria-expanded'],'true');
 });

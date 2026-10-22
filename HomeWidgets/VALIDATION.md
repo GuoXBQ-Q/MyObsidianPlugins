@@ -192,3 +192,9 @@ MyCalendar 定义新增 `frame: 'card'`，保留原 frameless 标题栏行为，
 按参考图调整为上方整行内容输入，下方左侧紧凑日期框、框内右侧日历按钮，下方“添加／取消”按钮靠右对齐。仅修改添加区样式，沿用日期浮层与原有保存行为。
 
 构建及现有内存浏览器脚本通过，检查按钮在日期框内部右侧、两操作按钮靠右且与日期框垂直居中，并查看 390px 下添加区布局和日历浮层。无页面错误。截图为 `preview/task-tree/add-child.png` 和 `add-child-narrow.png`。
+
+## 2026-10-22 已完成分区折叠
+
+“已完成”标题增加可聚焦的展开／收起按钮与主待办组数，使用 `aria-expanded` 和 `aria-controls` 关联内容。默认展开，`completedCollapsed` 按实例保存；折叠后保留标题，整个已完成父子组收起，不影响未完成父项中的已完成子项、任务状态、进度、隐藏徽标和源笔记。还原隐藏待办时展开该分区。
+
+定向 `node --test tests/tasks-widget.test.cjs` 16 项通过，新增实例隔离与持久化、折叠不改数据与统计、父子组显示范围、保存失败重试、还原展开行为。构建及内存浏览器验证通过，检查 Enter 展开／收起、切换后键盘焦点、重建首页后保留状态、同源镜像独立、390px 窄屏及已有任务交互，无页面错误。截图为 `preview/task-tree/completed-collapsed.png` 和 `completed-collapsed-narrow.png`。

@@ -30,6 +30,12 @@
 @container home-widgets (max-width:760px){.hw-home [data-widget-type="tasks"] .hw-task-list{min-height:0}}
 .hw-home [data-widget-type="tasks"] .hw-task-section{font-size:10px;font-weight:500;letter-spacing:.06em;color:var(--hw-muted);margin:12px 0 2px;padding-bottom:5px;border-bottom:1px solid var(--hw-line)}
 .hw-home [data-widget-type="tasks"] .hw-task-section:first-child{margin-top:0}
+.hw-home [data-widget-type="tasks"] .hw-task-completed-heading{padding-bottom:2px}
+.hw-home [data-widget-type="tasks"] .hw-task-section-toggle{width:100%;justify-content:flex-start;gap:6px;padding:3px 0;border:0;border-radius:4px;color:inherit;font:inherit}
+.hw-home [data-widget-type="tasks"] .hw-task-section-toggle svg{width:14px;height:14px;flex-shrink:0;transition:transform .15s}
+.hw-home [data-widget-type="tasks"] .hw-task-section-toggle[aria-expanded="false"] svg{transform:rotate(-90deg)}
+.hw-home [data-widget-type="tasks"] .hw-task-completed-count{margin-left:auto;min-width:20px;padding:1px 6px;border-radius:10px;background:var(--hw-soft);font-size:10px;line-height:1.4;text-align:center;font-variant-numeric:tabular-nums}
+.hw-home [data-widget-type="tasks"] .hw-task-completed[hidden]{display:none}
 .hw-home [data-widget-type="tasks"] .hw-task-group{position:relative;min-width:0;border-radius:9px;transition:background .15s}
 .hw-home [data-widget-type="tasks"] .hw-task-group>.hw-task{padding:10px 4px;gap:6px}
 .hw-home [data-widget-type="tasks"] .hw-task-group:has(.hw-task-child){background:color-mix(in srgb,var(--hw-accent) 3%,transparent)}
