@@ -330,10 +330,12 @@
 }
 
 .mc-chip-dot {
-	width: 5px;
-	height: 5px;
+	width: 6px;
+	height: 6px;
+	box-sizing: border-box;
 	border-radius: 50%;
-	background: var(--mc-chip-color, var(--interactive-accent));
+	border: 1px solid var(--mc-chip-color, var(--interactive-accent));
+	background: transparent;
 	flex-shrink: 0;
 }
 
@@ -859,7 +861,10 @@
 .mc-agenda-dot {
 	width: 8px;
 	height: 8px;
+	box-sizing: border-box;
 	border-radius: 50%;
+	border: 1px solid var(--interactive-accent);
+	background: transparent;
 	flex-shrink: 0;
 }
 

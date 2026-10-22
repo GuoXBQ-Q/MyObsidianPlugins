@@ -234,7 +234,7 @@ export class CalendarView extends ItemView {
 		chip.style.setProperty('--mc-chip-color', color);
 
 		const dot = chip.createSpan('mc-chip-dot');
-		dot.style.background = color;
+		dot.style.borderColor = color;
 		if (!isMultiDay(ev)) chip.createSpan({ cls: 'mc-chip-time', text: ev.startTime ? fmtTimeShort(ev.startTime) : '全天' });
 		chip.createSpan({ cls: 'mc-chip-title', text: ev.title });
 		if (ev.important) chip.createSpan({ cls: 'mc-chip-star', text: '★' });
@@ -545,7 +545,7 @@ export class CalendarView extends ItemView {
 			const item = scroll.createDiv('mc-agenda-item');
 			if (eventEndDate(ev) < today) item.addClass('mc-past');
 			const dot = item.createSpan('mc-agenda-dot');
-			dot.style.background = color;
+			dot.style.borderColor = color;
 			item.createSpan({
 				cls: 'mc-agenda-time',
 				text: isMultiDay(ev) ? `${ev.date}${ev.startTime ? ' ' + ev.startTime : ''} 至 ${eventEndDate(ev)}${ev.endTime ? ' ' + ev.endTime : ''}` : ev.startTime ? `${fmtTimeShort(ev.startTime)}${ev.endTime ? ' – ' + fmtTimeShort(ev.endTime) : ''}` : '全天',

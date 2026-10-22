@@ -203,10 +203,12 @@ export const MY_CALENDAR_WIDGET_CSS = `
 }
 
 .mcw-dot {
-	width: 4px;
-	height: 4px;
+	width: 6px;
+	height: 6px;
+	box-sizing: border-box;
 	border-radius: 50%;
-	background: var(--mcw-chip-color, var(--interactive-accent));
+	border: 1px solid var(--mcw-chip-color, var(--interactive-accent));
+	background: transparent;
 	flex-shrink: 0;
 }
 
