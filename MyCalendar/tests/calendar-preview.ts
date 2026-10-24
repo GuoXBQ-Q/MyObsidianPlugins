@@ -5,10 +5,17 @@ import { CalendarEvent, DEFAULT_SETTINGS } from '../src/types';
 const event = (id: string, title: string, date: string, endDate?: string, color = 'blue'): CalendarEvent => ({ id, title, date, endDate, color, createdAt: 0, note: '预览示例，真实日程未被读取或修改' });
 const callbacks = new Set<() => void>();
 const plugin = {
+	isCountdownAvailable: () => false,
 	app: {}, settings: { ...DEFAULT_SETTINGS },
 	events: [event('tianjin', '天津 · 会议活动', '2026-11-06', '2026-11-09'), event('prep', '会前准备', '2026-11-07', '2026-11-08', 'purple'), event('month', '跨月出差', '2026-10-30', '2026-11-03', 'teal'), { ...event('single', '项目同步', '2026-11-06'), startTime: '10:00', endTime: '11:00' }],
 	onRefresh(callback: () => void) { callbacks.add(callback); return () => callbacks.delete(callback); },
 	async saveAll() { view.rerender(); for (const callback of callbacks) callback(); },
+	async saveEvent(value: CalendarEvent, existing: CalendarEvent | null) {
+		const copy = JSON.parse(JSON.stringify(value));
+		this.events = existing ? this.events.map(event => event.id === value.id ? copy : event) : [...this.events, copy];
+		await this.saveAll();
+	},
+	async deleteEvent(value: CalendarEvent) { this.events = this.events.filter(event => event.id !== value.id); await this.saveAll(); },
 	openDayView(key: string) { view.jumpTo(new Date(key + 'T00:00:00'), 'day'); },
 };
 const view = new CalendarView({ app: plugin.app } as any, plugin as any);

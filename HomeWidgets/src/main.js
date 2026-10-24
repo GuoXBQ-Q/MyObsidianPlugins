@@ -10,6 +10,9 @@ const {registerBuiltins}=require('./widgets');
 const {HomeSettings}=require('./settings');
 const {createPluginDataStore}=require('./services/plugin-data');
 const {createPersistentEventService}=require('./services/persistent-events');
+const {createCalendarDisplayStore}=require('./services/calendar-display');
+const {createCalendarAdapter}=require('./adapters/calendar-source');
+const {createCountdownService}=require('./services/countdown');
 const {assertFields}=require('./core/format');
 const {createPluginUpdater}=require('../../shared/plugin-updater');
 class HomeRenderChild extends MarkdownRenderChild {
@@ -23,7 +26,13 @@ class HomeWidgetsPlugin extends Plugin {
   async onload(){
     this.dataStore=createPluginDataStore({load:()=>this.loadData(),save:data=>this.saveData(data)});
     const saved=await this.dataStore.read();this.settings={homeFile:saved.homeFile||'homepage.md'};this.bus=new Bus();this.registry=new WidgetRegistry();registerBuiltins(this.registry);this.renders=new Set();this.register(()=>{for(const render of [...this.renders])render.unload();this.renders.clear();});
-    this.io=createVaultIO(this.app,this.bus);this.integrations=createIntegrations(this.app,{Component,MarkdownRenderer,Scope});this.services=createServices(this.io,this.bus,this.integrations,createPersistentEventService(this.dataStore,this.bus));
+    this.io=createVaultIO(this.app,this.bus);this.integrations=createIntegrations(this.app,{Component,MarkdownRenderer,Scope});
+    this.calendar=createCalendarAdapter({display:createCalendarDisplayStore(this.dataStore),bus:this.bus,resolve:()=>{
+      const manager=this.app.plugins;if(manager?.enabledPlugins&&!manager.enabledPlugins.has('my-calendar'))return null;
+      const plugin=manager?.plugins?.['my-calendar'];return plugin?.countdownSource?{source:plugin.countdownSource,widget:plugin.homeWidget}:null;
+    },registerWidget:definition=>this.api.registerWidget(definition,{pluginId:'my-calendar',pluginName:'MyCalendar'})});
+    this.register(()=>this.calendar.dispose());
+    this.services=createServices(this.io,this.bus,this.integrations,createCountdownService(createPersistentEventService(this.dataStore,this.bus),this.calendar));
     this.updater=createPluginUpdater(this,require('obsidian'));
     this.registerMarkdownCodeBlockProcessor('home-widgets',(source,el,ctx)=>{
       let settings;try{settings=source.trim()?parseYaml(source):{};if(settings===null)settings={};if(typeof settings!=='object'||Array.isArray(settings))throw new Error('代码块应填写 layout: Home/widgets.json');}
@@ -44,6 +53,7 @@ class HomeWidgetsPlugin extends Plugin {
       if(typeof source.pluginId!=='string'||!source.pluginId.trim()||typeof source.pluginName!=='string'||!source.pluginName.trim())throw new Error('注册组件必须提供 pluginId 和 pluginName');
       const unregister=this.registry.register(definition,{pluginId:source.pluginId,pluginName:source.pluginName,kind:'external'});this.bus.emit('registry');return ()=>{unregister();this.bus.emit('registry');};
     },listWidgetTypes:()=>this.registry.list().map(d=>({type:d.type,label:d.label})),registerActivitySource:definition=>this.services.activity.registerSource(definition)};
+    this.calendar.start();
   }
   saveSettings(){return this.dataStore.update(data=>({...data,homeFile:this.settings.homeFile}));}
 }

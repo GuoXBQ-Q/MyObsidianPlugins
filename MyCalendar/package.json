@@ -8,7 +8,7 @@
 		"build": "node esbuild.config.mjs production",
 		"deploy": "node scripts/deploy.cjs",
 		"typecheck": "tsc -noEmit -skipLibCheck",
-		"test": "node --test tests/event-range.test.cjs",
+		"test": "node --test tests/event-range.test.cjs tests/countdown-sync.test.cjs",
 		"preview": "node tests/preview.cjs"
 	},
 	"devDependencies": {

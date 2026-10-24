@@ -20,9 +20,10 @@ const sample=[
   {id:'event-weekend',title:'留给自己的周末',date:'2026-10-18',area:'生活'},
   {id:'event-newyear',title:'迎接新的一年',date:'2027-01-01',area:'生活'},
 ];
-async function mount(events=sample,settings={},aborted=false,local={}){
+async function mount(events=sample,settings={},aborted=false,local={},source={}){
   const el=new Node('body'),actions=new Node('header'),dialogs=[],saves=[],timers=[],deletes=[],archives=[],restores=[],refreshes=[],patches=[],errors=[];
-  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{list:async(source,{includeArchived=false}={})=>includeArchived?events:events.filter(e=>!e.archived),save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args),archive:async(...args)=>archives.push(args),restore:async(...args)=>restores.push(args)}},forms:{show:(...args)=>dialogs.push(args)},lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
+  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{sourceStatus:async()=>null,canClearFeatured:async()=>true,list:async(source,{includeArchived=false}={})=>includeArchived?events:events.filter(e=>!e.archived),save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args),archive:async(...args)=>archives.push(args),restore:async(...args)=>restores.push(args)}},forms:{show:(...args)=>dialogs.push(args),confirm:(...args)=>dialogs.push(args)},notify:message=>errors.push(message),lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
+  Object.assign(ctx.services.events,source);
   await widget.mount(ctx);return {ctx,el,actions,dialogs,saves,timers,deletes,archives,restores,refreshes,local,patches,errors};
 }
 test('pinned countdown retains its date, while upcoming items precede expired dates',async()=>{
@@ -48,6 +49,15 @@ test('add, hero edit and list edit continue saving through the date service',asy
   f.el.find('hw-countdown-edit')[0].events.click();await f.dialogs[1][3]({title:'新名称',date:'2026-11-02'});
   assert.deepEqual(JSON.parse(JSON.stringify(f.saves[0])),['default',{title:'新名称',date:'2026-11-02',id:'event-project'}]);
   f.el.find('hw-countdown-event')[0].events.click();assert.equal(f.dialogs[2][2].id,'event-weekend');
+});
+
+test('calendar dates show their source, allow pinning and archive, and keep editing in the calendar',async()=>{
+ const events=sample.map(e=>({...e,calendarEventId:'calendar-'+e.id})),f=await mount(events);
+ assert.equal(f.el.find('hw-countdown-source').length,events.length);assert.equal(f.el.find('hw-countdown-edit').length,0);
+ assert.equal(f.el.find('hw-countdown-delete').length,0);assert.equal(f.el.find('hw-countdown-pin-button').length,events.length);
+ f.el.find('hw-countdown-event')[0].events.click();assert.match(f.errors[0],/MyCalendar/);assert.equal(f.dialogs.length,0);
+ f.el.find('hw-countdown-archive-date')[0].events.click();assert.equal(f.dialogs[0][0],'归档日历同步日期');
+ await f.dialogs[0][2]();assert.equal(f.archives[0][1].id,'event-project');assert.equal(f.deletes.length,0);assert.equal(f.saves.length,0);
 });
 test('zero limit and default settings show all dates, while empty data and cancelled mount avoid stale UI',async()=>{
   const all=await mount(sample,{upcoming:0});assert.equal(all.el.find('hw-countdown-event').length,3);assert.equal(all.el.find('hw-countdown-list-toggle').length,0);
@@ -121,6 +131,17 @@ test('deleted pins are cleared even when empty and newly added dates stay select
   const added=await mount(newEvents,{featured:''});assert.equal(added.patches.length,0);
   await added.el.find('hw-countdown-pin-button')[0].events.click();assert.equal(added.patches[0].featured,'event-brand-new');
   const pinned=await mount(newEvents,{featured:'event-brand-new'});assert.equal(pinned.el.find('hw-countdown-pin')[0].textContent,'置顶');
+});
+
+test('disconnected or failed sources show status and retain missing calendar pins until a valid snapshot confirms removal',async()=>{
+  for(const state of ['disconnected','error']){
+    const message=state==='disconnected'?'日程来源未连接':'日程来源读取失败';
+    const f=await mount(sample,{featured:'event-my-calendar-missing'},false,{}, {sourceStatus:async()=>({state,message}),canClearFeatured:async()=>false});
+    assert.equal(f.el.find('hw-countdown-source-status')[0].textContent,message);assert.equal(f.patches.length,0);
+    assert.equal(f.el.find('hw-countdown-title')[0].textContent,'留给自己的周末');
+  }
+  const connected=await mount(sample,{featured:'event-my-calendar-missing'},false,{}, {sourceStatus:async()=>({state:'connected',message:''}),canClearFeatured:async()=>true});
+  assert.equal(connected.el.find('hw-countdown-source-status').length,0);assert.equal(connected.patches[0].featured,'');
 });
 
 test('pin controls reject stale dates, prevent duplicate writes and recover from save failures',async()=>{

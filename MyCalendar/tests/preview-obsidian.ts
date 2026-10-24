@@ -26,6 +26,13 @@ export class ItemView {
 	constructor(leaf: any) { this.app = leaf.app; this.contentEl.className = 'view-content'; }
 }
 export class WorkspaceLeaf {}
+export class Plugin {
+	app: any;
+	constructor(app: any) { this.app = app; }
+}
+export class PluginSettingTab {}
+export class Setting {}
+export async function requestUrl(): Promise<never> { throw new Error('预览不发送网络请求'); }
 export class Modal {
 	contentEl: HTMLElement;
 	modalEl: HTMLElement;

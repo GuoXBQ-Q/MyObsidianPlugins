@@ -20,6 +20,12 @@
 .hw-home [data-widget-type="countdown"] .hw-countdown-edit svg{width:16px;height:16px}
 .hw-home [data-widget-type="countdown"] .hw-countdown-delete{flex-shrink:0;width:26px;height:26px;padding:5px;color:var(--hw-muted);opacity:.75}
 .hw-home [data-widget-type="countdown"] .hw-countdown-delete svg{width:15px;height:15px}
+.hw-home [data-widget-type="countdown"] .hw-countdown-source{font-size:10px;color:var(--hw-muted);line-height:1.6}
+.hw-home [data-widget-type="countdown"] .hw-countdown-source-status{margin:0 0 10px;color:var(--hw-muted);font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.hw-home [data-widget-type="countdown"] .hw-countdown-meta>.hw-countdown-source{margin-left:auto}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive-date{flex-shrink:0;width:26px;height:26px;padding:5px;color:var(--hw-muted)}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive-date svg{width:15px;height:15px}
+.hw-home [data-widget-type="countdown"] .hw-countdown-archive-date:hover{color:var(--hw-accent)}
 .hw-home [data-widget-type="countdown"] .hw-countdown-delete:hover,.hw-home [data-widget-type="countdown"] .hw-countdown-delete:focus-visible{opacity:1;color:var(--text-error,#b65c6a);background:color-mix(in srgb,var(--text-error,#b65c6a) 9%,transparent)}
 .hw-home [data-widget-type="countdown"] .hw-countdown-content{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:7px}
 .hw-home [data-widget-type="countdown"] .hw-countdown-copy{min-width:0}

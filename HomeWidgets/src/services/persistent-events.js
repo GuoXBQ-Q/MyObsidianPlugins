@@ -1,10 +1,15 @@
 const {daysUntil}=require('./date');
 const {assertFields}=require('../core/format');
 function collectionKey(source='default'){return String(source??'default').trim();}
+function checkedCollection(source){
+  const key=collectionKey(source);
+  if(!key||/[\\/]/.test(key)||/\.md$/i.test(key))throw new Error('日期集合请填写名称（例如 default），不再支持笔记路径');
+  return key;
+}
 function schema(data){
   if(data.countdowns===undefined)return {version:1,collections:{}};
   const value=data.countdowns;
-  assertFields(value,['version','collections'],'倒计时配置');
+  assertFields(value,['version','collections','calendarDisplay'],'倒计时配置');
   if(!value||value.version!==1||!value.collections||typeof value.collections!=='object'||Array.isArray(value.collections))throw new Error('倒计时 JSON 数据格式或版本不受支持，已保留原数据');
   for(const collection of Object.values(value.collections))assertFields(collection,['events'],'日期集合');
   return value;
@@ -13,19 +18,19 @@ function validate(events){
   if(!Array.isArray(events))throw new Error('倒计时 JSON 日期列表无效');
   const ids=new Set();
   for(const event of events){
-    assertFields(event,['id','title','date','start','area','archived'],'日期记录');
+    assertFields(event,['id','title','date','start','area','archived','calendarEventId'],'日期记录');
     if(!event||typeof event.id!=='string'||!event.id.startsWith('event-')||ids.has(event.id)||typeof event.title!=='string'||!event.title.trim())throw new Error('日期记录或 ID 无效／重复，已保留原数据');
     ids.add(event.id);daysUntil(event.date);
     if(event.start){daysUntil(event.start);if(event.start>event.date)throw new Error('开始日期不能晚于目标日期');}
     if(event.area!==undefined&&typeof event.area!=='string')throw new Error('日期分类无效');
     if(event.archived!==undefined&&typeof event.archived!=='boolean')throw new Error('日期归档状态无效，已保留原数据');
+    if(event.calendarEventId!==undefined&&(typeof event.calendarEventId!=='string'||!event.calendarEventId.trim()))throw new Error('日程关联 ID 无效，已保留原数据');
   }
   return events;
 }
 function createPersistentEventService(data,bus){
   async function ensure(source){
-    const key=collectionKey(source);
-    if(!key||/[\\/]/.test(key)||/\.md$/i.test(key))throw new Error('日期集合请填写名称（例如 default），不再支持笔记路径');
+    const key=checkedCollection(source);
     const root=await data.read(),current=schema(root);
     if(Object.hasOwn(current.collections,key)){validate(current.collections[key]?.events);return key;}
     await data.update(latest=>{
@@ -45,7 +50,7 @@ function createPersistentEventService(data,bus){
   }
   function confirmed(events,event){
     const current=events.find(item=>item.id===event?.id);
-    if(!current||['id','title','date','start','area'].some(key=>(current[key]||'')!==(event[key]||''))||(current.archived??false)!==(event.archived??false))throw new Error('日期记录已变化，请刷新后重新确认');
+    if(!current||['id','title','date','start','area','calendarEventId'].some(key=>(current[key]||'')!==(event[key]||''))||(current.archived??false)!==(event.archived??false))throw new Error('日期记录已变化，请刷新后重新确认');
     return current;
   }
   async function setArchived(source,event,archived){
@@ -60,7 +65,9 @@ function createPersistentEventService(data,bus){
     });
   }
   return {
-    async list(source,{includeArchived=false}={}){const key=await ensure(source),root=await data.read(),events=validate(schema(root).collections[key].events);return includeArchived?events:events.filter(event=>!event.archived);},
+    sourceStatus:async()=>null,
+    canClearFeatured:async()=>true,
+    async list(source,{includeArchived=false}={}){const key=await ensure(source),root=await data.read(),events=validate(schema(root).collections[key].events);const independent=events.filter(event=>!event.calendarEventId);return includeArchived?independent:independent.filter(event=>!event.archived);},
     async save(source,value){
       const clean=text=>String(text||'').replace(/[\r\n]+/g,' ').trim();
       const title=clean(value.title);if(!title)throw new Error('请填写日期名称');
@@ -70,13 +77,15 @@ function createPersistentEventService(data,bus){
         if(!value.id)return [...events,item];
         const current=events.find(event=>event.id===value.id);
         if(!current)throw new Error('日期记录已变化，请刷新后再编辑');
+        if(current.calendarEventId)throw new Error('该日期由 MyCalendar 同步，请在日程中修改');
         if(current.archived)throw new Error('日期已归档，请先恢复后再编辑');
         return events.map(event=>event.id===value.id?item:event);
       });
     },
     async remove(source,event){
       await change(source,events=>{
-        confirmed(events,event);
+        const current=confirmed(events,event);
+        if(current.calendarEventId)throw new Error('该日期由 MyCalendar 同步，请在日程中取消同步或删除日程');
         return events.filter(item=>item.id!==event.id);
       });
     },
@@ -84,4 +93,4 @@ function createPersistentEventService(data,bus){
     restore:(source,event)=>setArchived(source,event,false)
   };
 }
-module.exports={createPersistentEventService,collectionKey};
+module.exports={createPersistentEventService,collectionKey,checkedCollection,schema,validate};

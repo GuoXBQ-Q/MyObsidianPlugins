@@ -60,8 +60,10 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
     };
     const watcher=topic=>life.own(services.bus.on(topic,()=>{
       if(life.signal.aborted)return;
-      // Keep a widget's active editor intact; retry on blur, not on an interval.
-      if(body.contains(doc.activeElement)||forms.active){record.pending=true;return;}
+      // Focus on read-only content (e.g. countdown buttons) must not delay updates.
+      // Keep drafts intact while focus stays anywhere in a widget with an editor.
+      const editingBody=body.contains(doc.activeElement)&&body.querySelector('textarea,select,input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]),[contenteditable]:not([contenteditable="false"]),[role="textbox"]');
+      if(editingBody||forms.active){record.pending=true;return;}
       refreshWidget(record);
     }));
     for(const topic of def.watch?.(config)||[])watcher(topic);

@@ -105,7 +105,7 @@ test('bursts of layout notifications serialize reads and stop on settings teardo
  const pending=[];let reads=0;const f=await settingsFixture(()=>{reads++;return new Promise(resolve=>pending.push(resolve));});f.tab.display();
  for(let i=0;i<10;i++){f.plugin.bus.changed('Home/widgets.json');f.plugin.bus.emit('layout:Home/widgets.json');}
  assert.equal(reads,1);pending[0](settingsLayout());await settleSettings();assert.equal(reads,2);
- f.tab.hide();pending[1](settingsLayout());await settleSettings();assert.equal(reads,2);assert.equal(f.plugin.bus.topics.size,0);assert.equal(f.errors.length,0);
+ f.tab.hide();pending[1](settingsLayout());await settleSettings();assert.equal(reads,2);assert.equal(f.plugin.bus.topics.size,0);assert.equal(f.errors.length,0);f.plugin.unload();
 });
 
 test('settings separate builtins from plugin registrations and retain disconnected extension instances',async()=>{

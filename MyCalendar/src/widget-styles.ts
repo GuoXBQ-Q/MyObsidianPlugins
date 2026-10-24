@@ -1,4 +1,17 @@
 /** MyCalendar Home Widgets 组件样式，挂载时注入一次（scope: .mcw-root） */
+const styleLeases = new WeakMap<Document, { style: HTMLStyleElement; users: number }>();
+export function acquireCalendarWidgetStyles(doc: Document): () => void {
+	let lease = styleLeases.get(doc);
+	if (!lease) {
+		const style = doc.createElement('style'); style.id = 'my-calendar-widget-css'; style.textContent = MY_CALENDAR_WIDGET_CSS;
+		doc.head.append(style); lease = { style, users: 0 }; styleLeases.set(doc, lease);
+	}
+	lease.users++; let released = false;
+	return () => {
+		if (released) return; released = true;
+		if (--lease!.users === 0) { lease!.style.remove(); styleLeases.delete(doc); }
+	};
+}
 export const MY_CALENDAR_WIDGET_CSS = `
 .mcw-root {
 	--mcw-festival: #d05a5a;

@@ -1,7 +1,7 @@
 import { App, Modal, Notice, setIcon } from 'obsidian';
 import type MyCalendarPlugin from './main';
 import { CalendarEvent } from './types';
-import { normalizeHex, todayKey, uid } from './utils';
+import { todayKey, uid } from './utils';
 import { mountTimeFields } from './time-picker';
 import { mountColorPicker } from './color-picker';
 
@@ -13,6 +13,7 @@ export class EventModal extends Modal {
 	private ev: CalendarEvent;
 	private timeControl: ReturnType<typeof mountTimeFields> | null = null;
 	private colorControl: ReturnType<typeof mountColorPicker> | null = null;
+	private saving = false;
 
 	constructor(
 		app: App,
@@ -22,8 +23,9 @@ export class EventModal extends Modal {
 		defaultTime?: string
 	) {
 		super(app);
+		this.existing = existing ? JSON.parse(JSON.stringify(existing)) : null;
 		this.ev = existing
-			? { ...existing }
+			? JSON.parse(JSON.stringify(existing))
 			: {
 					id: uid(),
 					title: '',
@@ -66,6 +68,9 @@ export class EventModal extends Modal {
 		setIcon(impIcon, 'star');
 		impRow.createSpan({ cls: 'mc-option-title', text: '重要事件' });
 
+		if (this.plugin.isCountdownAvailable()) this.renderCountdownSettings(contentEl);
+		else if (this.ev.countdown) contentEl.createEl('p', { cls: 'mc-countdown-help', text: '此日程已关联倒计时。Home Widgets 当前未连接，关联设置会保留，恢复连接后继续同步。' });
+
 		// 分类颜色
 		this.colorControl = mountColorPicker(contentEl, this.ev, this.plugin.settings);
 
@@ -86,9 +91,7 @@ export class EventModal extends Modal {
 					delBtn.setText('确认删除？');
 					delBtn.addClass('mc-armed');
 				} else {
-					this.plugin.events = this.plugin.events.filter((e) => e.id !== this.ev.id);
-					this.plugin.saveAll();
-					this.close();
+					void this.runSave(() => this.plugin.deleteEvent(this.existing!));
 				}
 			});
 		}
@@ -99,7 +102,33 @@ export class EventModal extends Modal {
 		window.setTimeout(() => titleInput.focus(), 50);
 	}
 
-	private save(): void {
+	private renderCountdownSettings(contentEl: HTMLElement): void {
+		// 倒计时是 Home Widgets 的日期集合，以日程开始日为目标日期。
+		const syncId = `mc-countdown-${this.ev.id}`;
+		const syncRow = this.timeControl!.optionsEl.createEl('label', { cls: 'mc-option-card', attr: { for: syncId } });
+		const syncCheck = syncRow.createEl('input', { type: 'checkbox', attr: { id: syncId, 'aria-label': '同步到倒计时', 'aria-description': '将日程标题与开始日期单向同步到 Home Widgets；取消同步或删除日程也会移除关联倒计时' } });
+		syncCheck.checked = !!this.ev.countdown;
+		const syncIcon = syncRow.createSpan({ cls: 'mc-option-icon', attr: { 'aria-hidden': 'true' } });
+		setIcon(syncIcon, 'hourglass');
+		syncRow.createSpan({ cls: 'mc-option-title', text: '同步到倒计时' });
+		const syncSettings = contentEl.createDiv('mc-countdown-settings');
+		syncSettings.hidden = !syncCheck.checked;
+		const collectionLabel = syncSettings.createEl('label', { cls: 'mc-label', text: '倒计时集合' });
+		const collectionInput = syncSettings.createEl('input', { cls: 'mc-input', type: 'text', attr: { id: `${syncId}-collection`, 'aria-label': '倒计时集合', 'aria-describedby': `${syncId}-help`, placeholder: 'default' } });
+		collectionLabel.htmlFor = collectionInput.id;
+		collectionInput.value = this.ev.countdown?.collection ?? 'default';
+		syncSettings.createEl('p', { cls: 'mc-countdown-help', text: '填写倒计时组件使用的「日期集合」（默认为 default）。按开始日期计算天数，不包含具体时间；修改日程会同步更新，取消同步或删除日程也会移除关联倒计时。需启用支持联动的 Home Widgets，重新连接后自动读取最新日程。', attr: { id: `${syncId}-help` } });
+		const updateSync = () => {
+			syncSettings.hidden = !syncCheck.checked;
+			if (syncCheck.checked) this.ev.countdown = { collection: collectionInput.value.trim() };
+			else delete this.ev.countdown;
+		};
+		syncCheck.addEventListener('change', updateSync);
+		collectionInput.addEventListener('input', updateSync);
+	}
+
+	private async save(): Promise<void> {
+		if (this.saving) return;
 		if (!this.ev.title.trim()) {
 			new Notice('请先填写日程标题');
 			return;
@@ -110,18 +139,21 @@ export class EventModal extends Modal {
 			return;
 		}
 		this.ev.title = this.ev.title.trim();
-		const customColor = normalizeHex(this.ev.color);
-		if (customColor) {
-			this.plugin.settings.customColors = [...new Set([customColor, ...(this.plugin.settings.customColors ?? [])])].slice(0, 12);
+		await this.runSave(() => this.plugin.saveEvent(this.ev, this.existing));
+	}
+
+	private async runSave(action: () => Promise<void>): Promise<void> {
+		if (this.saving) return;
+		this.saving = true;
+		const controls = Array.from(this.contentEl.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLTextAreaElement>('input, button, textarea'));
+		const disabled = controls.map(control => control.disabled);
+		controls.forEach(control => { control.disabled = true; });
+		try { await action(); this.close(); }
+		catch (error) { new Notice(`日程保存失败：${error instanceof Error ? error.message : String(error)}`, 8000); }
+		finally {
+			this.saving = false;
+			controls.forEach((control, index) => { control.disabled = disabled[index]; });
 		}
-		if (this.existing) {
-			const idx = this.plugin.events.findIndex((e) => e.id === this.ev.id);
-			if (idx >= 0) this.plugin.events[idx] = { ...this.ev };
-		} else {
-			this.plugin.events.push({ ...this.ev });
-		}
-		this.plugin.saveAll();
-		this.close();
 	}
 
 	onClose(): void {

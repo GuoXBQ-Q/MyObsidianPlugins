@@ -13,7 +13,7 @@ import {
 	todayKey,
 	weekdayLabels,
 } from './utils';
-import { MY_CALENDAR_WIDGET_CSS } from './widget-styles';
+import { acquireCalendarWidgetStyles } from './widget-styles';
 import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
 
 /**
@@ -86,14 +86,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			const showHolidays = config.showHolidays !== false;
 			const inPreview = !!context.platform.preview;
 
-			// 样式注入一次（Obsidian 与 Home Widgets 浏览器预览通用）
-			if (doc.getElementById('my-calendar-widget-css') === null && doc.head) {
-				const style = doc.createElement('style');
-				style.id = 'my-calendar-widget-css';
-				style.textContent = MY_CALENDAR_WIDGET_CSS;
-				doc.head.append(style);
-				lifetime.own(() => style.remove());
-			}
+			lifetime.own(acquireCalendarWidgetStyles(doc));
 
 			// 月份光标存在宿主的实例级 local 里，数据刷新后不丢当前月份
 			const now = new Date();

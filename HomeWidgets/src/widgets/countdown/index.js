@@ -13,15 +13,20 @@ function listIcon(event){
   return event.area==='生活'?'coffee':'calendar';
 }
 module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass'),span:5,defaults:{source:'default',featured:'',upcoming:0},
-  fields:[{key:'source',label:'日期集合',required:true,help:'相同集合共用日期，内容保存于插件 data.json，不需要填写笔记路径。'},{key:'featured',label:'置顶日期',type:'select',dependsOn:['source'],options:async(value,services)=>[['','自动选择（最近未到期的日子）'],...(await services.events.list(value.source)).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.id,e.title+' · '+e.date])],help:'仅影响当前组件；也可直接点击日期旁的图钉设置或取消置顶。全部日期都已结束时，自动显示最近结束的日子。'},{key:'upcoming',label:'折叠时显示数量（0 = 全部）',type:'number',min:0,max:200,help:'设置数量后仍可点击「查看全部」；日期较多时在组件内滚动查看。'}],
-  watch:c=>['countdown:'+collectionKey(c.source)],
+  fields:[{key:'source',label:'日期集合',required:true,help:'相同集合共用日期。独立日期保存在本插件，关联日程由 MyCalendar 提供；无需填写笔记路径。'},{key:'featured',label:'置顶日期',type:'select',dependsOn:['source'],options:async(value,services)=>[['','自动选择（最近未到期的日子）'],...(await services.events.list(value.source)).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.id,e.title+' · '+e.date])],help:'仅影响当前组件；也可直接点击日期旁的图钉设置或取消置顶。全部日期都已结束时，自动显示最近结束的日子。'},{key:'upcoming',label:'折叠时显示数量（0 = 全部）',type:'number',min:0,max:200,help:'设置数量后仍可点击「查看全部」；日期较多时在组件内滚动查看。'}],
+  watch:c=>['countdown:'+collectionKey(c.source),'calendar-source'],
   async mount(ctx){
     const all=await ctx.services.events.list(ctx.config.source,{includeArchived:true});if(ctx.signal.aborted)return;
+    const sourceStatus=await ctx.services.events.sourceStatus();if(ctx.signal.aborted)return;
+    if(sourceStatus&&sourceStatus.state!=='connected')ctx.el.append(element(ctx.doc,'p',{class:'hw-countdown-source-status',role:'status'},sourceStatus.message));
     const events=all.filter(e=>!e.archived),archived=all.filter(e=>e.archived);
-    if(ctx.config.featured&&!events.some(e=>e.id===ctx.config.featured)){
+    if(ctx.config.featured&&!events.some(e=>e.id===ctx.config.featured)&&await ctx.services.events.canClearFeatured(ctx.config.featured)){
       await ctx.updateConfig({featured:''});if(ctx.signal.aborted)return;
     }
-    const doc=ctx.doc,edit=e=>ctx.forms.show(e?'编辑关键日期':'添加关键日期',fields,e||{area:'生活'},v=>ctx.services.events.save(ctx.config.source,{...v,id:e?.id}));
+    const doc=ctx.doc,edit=e=>{
+      if(e?.calendarEventId){ctx.notify('此倒计时来自 MyCalendar，请在日程中修改；取消同步或删除日程也会移除倒计时。');return;}
+      return ctx.forms.show(e?'编辑关键日期':'添加关键日期',fields,e||{area:'生活'},v=>ctx.services.events.save(ctx.config.source,{...v,id:e?.id}));
+    };
     const pinButton=event=>{
       const selected=event.id===ctx.config.featured;
       const pin=button(doc,'',()=>ctx.run(async()=>{
@@ -37,6 +42,12 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
       pin.append(icon(doc,'pin'));return pin;
     };
     const deleteButton=event=>{
+      if(event.calendarEventId){
+        const archive=button(doc,'',()=>ctx.forms.confirm('归档日历同步日期','归档后隐藏倒计时，仍会接收日程更新，可从「已归档」恢复。要停止联动，请在 MyCalendar 日程中取消同步。',async()=>{
+          await ctx.services.events.archive(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
+        },'归档'),{class:'hw-button hw-icon-button hw-countdown-archive-date','aria-label':'归档日期 '+event.title});
+        archive.append(icon(doc,'archive'));return archive;
+      }
       const remove=button(doc,'',()=>ctx.forms.show('删除关键日期',[],{},async()=>{
         await ctx.services.events.remove(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
       },'删除日期',{
@@ -73,8 +84,12 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
     const meta=element(doc,'div',{class:'hw-countdown-meta'});
     if(main.area)meta.append(element(doc,'span',{class:'hw-pill hw-countdown-category'},main.area));
     meta.append(element(doc,'span',{class:'hw-countdown-pin'},pinned?'置顶':'自动选择'));
-    const editButton=button(doc,'',()=>edit(main),{class:'hw-button hw-icon-button hw-countdown-edit','aria-label':'编辑'+main.title});
-    editButton.append(icon(doc,'edit'));meta.append(editButton,pinButton(main),deleteButton(main));
+    if(main.calendarEventId)meta.append(element(doc,'span',{class:'hw-countdown-source'},'日历同步'));
+    else{
+      const editButton=button(doc,'',()=>edit(main),{class:'hw-button hw-icon-button hw-countdown-edit','aria-label':'编辑'+main.title});
+      editButton.append(icon(doc,'edit'));meta.append(editButton);
+    }
+    meta.append(pinButton(main),deleteButton(main));
     const content=element(doc,'div',{class:'hw-countdown-content'});
     const copy=element(doc,'div',{class:'hw-countdown-copy'},
       element(doc,'h3',{class:'hw-countdown-title'},main.title),
@@ -105,10 +120,11 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
         if(toggle){toggle.textContent=expanded?'收起':'查看全部（'+next.length+'）';toggle.setAttribute('aria-expanded',String(expanded));}
         for(const event of expanded?next:next.slice(0,limit)){
         const n=daysUntil(event.date),info=dateDetails(event.date),glyph=listIcon(event);
-        const row=button(doc,'',()=>edit(event),{class:'hw-button hw-countdown-event','aria-label':'编辑日期 '+event.title});
+        const row=button(doc,'',()=>edit(event),{class:'hw-button hw-countdown-event','aria-label':(event.calendarEventId?'查看日历同步日期 ':'编辑日期 ')+event.title});
         const leading=element(doc,'span',{class:'hw-countdown-event-icon is-'+glyph},icon(doc,glyph));
         const text=element(doc,'span',{class:'hw-countdown-event-copy'},element(doc,'span',{class:'hw-countdown-event-title'},event.title),
           element(doc,'time',{class:'hw-countdown-event-date',datetime:event.date},`${info.year===year?'':info.year+'年'}${info.month}月${info.day}日 · ${info.weekday}`));
+        if(event.calendarEventId)text.append(element(doc,'span',{class:'hw-countdown-source'},'日历同步'));
         const badge=element(doc,'span',{class:'hw-countdown-remaining'+(n>=0&&n<=1?' is-soon':'')});
         if(n===0||n===1)badge.append(n===0?'今天':'明天');
         else if(n<0)badge.append('已过 ',element(doc,'strong',{},Math.abs(n)),element(doc,'span',{},' 天'));

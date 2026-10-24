@@ -4,13 +4,11 @@ import { EventModal } from './event-modal';
 import { FetchedArrangement, setFetchedArrangements } from './holidays';
 import { MyCalendarSettingTab } from './settings';
 import { CalendarEvent, DEFAULT_SETTINGS, MyCalendarSettings } from './types';
-import { parseDateKey, todayKey } from './utils';
-import { createMyCalendarWidget } from './widget';
+import { normalizeHex, parseDateKey, todayKey } from './utils';
+import { CountdownSource } from './countdown-source';
+import { createMyCalendarWidget, type HomeWidgetDefinition } from './widget';
 import * as obsidian from 'obsidian';
 import { createPluginUpdater, type PluginUpdater } from '../../shared/plugin-updater';
-
-type HomeWidgetSource = { pluginId: string; pluginName: string };
-type HomeWidgetsAPI = { registerWidget: (definition: unknown, source: HomeWidgetSource) => () => void };
 
 export default class MyCalendarPlugin extends Plugin {
 	updater: PluginUpdater | null = null;
@@ -20,12 +18,16 @@ export default class MyCalendarPlugin extends Plugin {
 	fetchedHolidays: FetchedArrangement[] = [];
 
 	private refreshTargets = new Set<() => void>();
-	private widgetApiUnregister: (() => void) | null = null;
-	private widgetRetryTimer: number | null = null;
+	countdownSource: CountdownSource | null = null;
+	homeWidget: HomeWidgetDefinition | null = null;
+	private saveQueue: Promise<void> = Promise.resolve();
+	private savedEvents: CalendarEvent[] = [];
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.updater = createPluginUpdater(this, obsidian);
+		this.countdownSource = new CountdownSource(() => this.savedEvents);
+		this.homeWidget = createMyCalendarWidget(this);
 
 		this.registerView(VIEW_TYPE_MY_CALENDAR, (leaf: WorkspaceLeaf) => new CalendarView(leaf, this));
 
@@ -43,46 +45,14 @@ export default class MyCalendarPlugin extends Plugin {
 			name: '新建日程（今天）',
 			callback: () => new EventModal(this.app, this, null, todayKey()).open(),
 		});
-
-		// 若安装了 Home Widgets，把月历注册为它的一个组件（宿主可能尚未加载，做带重试的注册）
-		this.registerHomeWidget();
 	}
 
 	onunload(): void {
-		if (this.widgetRetryTimer !== null) {
-			window.clearTimeout(this.widgetRetryTimer);
-			this.widgetRetryTimer = null;
-		}
-		this.widgetApiUnregister?.();
-		this.widgetApiUnregister = null;
+		const source = this.countdownSource;
+		this.countdownSource = null; this.homeWidget = null; source?.dispose();
 	}
 
-	/** 通过 Home Widgets 公开 API（api.registerWidget）注册组件，插件加载顺序不确定时每秒重试 */
-	private registerHomeWidget(attempt = 0): void {
-		if (this.widgetApiUnregister) return;
-		const api = this.homeWidgetsApi();
-		if (api && typeof api.registerWidget === 'function') {
-			try {
-				this.widgetApiUnregister = api.registerWidget(createMyCalendarWidget(this), { pluginId: this.manifest.id, pluginName: this.manifest.name });
-				return;
-			} catch (e) {
-				console.error('[MyCalendar] 注册 Home Widgets 组件失败', e);
-				return;
-			}
-		}
-		if (attempt < 60) {
-			this.widgetRetryTimer = window.setTimeout(() => this.registerHomeWidget(attempt + 1), 1000);
-		}
-	}
-
-	private homeWidgetsApi(): HomeWidgetsAPI | null {
-		const hw = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } }).plugins?.plugins?.['home-widgets'] as
-			| { api?: Partial<HomeWidgetsAPI> & { version?: number } }
-			| undefined;
-		const api = hw?.api;
-		if (!api || api.version !== 2 || typeof api.registerWidget !== 'function') return null;
-		return { registerWidget: api.registerWidget.bind(hw) };
-	}
+	isCountdownAvailable(): boolean { return this.countdownSource?.canDisplay ?? false; }
 
 	async loadSettings(): Promise<void> {
 		const data = (await this.loadData()) as {
@@ -92,17 +62,56 @@ export default class MyCalendarPlugin extends Plugin {
 		} | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings ?? {});
 		this.events = Array.isArray(data?.events) ? data.events : [];
+		this.savedEvents = JSON.parse(JSON.stringify(this.events));
 		this.fetchedHolidays = Array.isArray(data?.fetchedHolidays) ? data.fetchedHolidays : [];
 		setFetchedArrangements(this.fetchedHolidays);
 	}
 
-	async saveAll(): Promise<void> {
-		await this.saveData({
-			events: this.events,
-			settings: this.settings,
-			fetchedHolidays: this.fetchedHolidays,
+	saveAll(): Promise<void> { return this.persist(); }
+
+	/** Serialize event edits against the latest committed state, including stale editors. */
+	saveEvent(event: CalendarEvent, expected: CalendarEvent | null): Promise<void> {
+		const draft: CalendarEvent = JSON.parse(JSON.stringify(event));
+		if (!draft.title.trim()) return Promise.reject(new Error('请先填写日程标题'));
+		draft.title = draft.title.trim();
+		if (draft.countdown && (!draft.countdown.collection.trim() || /[\\/]/.test(draft.countdown.collection) || /\.md$/i.test(draft.countdown.collection))) {
+			return Promise.reject(new Error('倒计时集合请填写名称（例如 default），不能使用笔记路径'));
+		}
+		if (draft.countdown) draft.countdown.collection = draft.countdown.collection.trim();
+		return this.persist(events => {
+			const current = events.find(item => item.id === draft.id);
+			if (expected ? !current || JSON.stringify(current) !== JSON.stringify(expected) : !!current) throw new Error('日程已变化，请重新打开后再编辑');
+			return expected ? events.map(item => item.id === draft.id ? draft : item) : [...events, draft];
+		}, normalizeHex(draft.color) ?? undefined);
+	}
+
+	deleteEvent(expected: CalendarEvent): Promise<void> {
+		return this.persist(events => {
+			const current = events.find(item => item.id === expected.id);
+			if (!current || JSON.stringify(current) !== JSON.stringify(expected)) throw new Error('日程已变化，请重新打开后再删除');
+			return events.filter(item => item.id !== expected.id);
 		});
-		this.refreshViews();
+	}
+
+	private persist(change?: (events: CalendarEvent[]) => CalendarEvent[], customColor?: string): Promise<void> {
+		const job = this.saveQueue.catch(() => {}).then(async () => {
+			const previous = this.savedEvents;
+			const settings = { ...this.settings };
+			if (customColor) settings.customColors = [...new Set([customColor, ...settings.customColors])].slice(0, 12);
+			const snapshot = JSON.parse(JSON.stringify({
+				events: change ? change(this.events) : this.events, settings, fetchedHolidays: this.fetchedHolidays,
+			}));
+			await this.saveData(snapshot);
+			if (change) this.events = snapshot.events;
+			if (customColor) this.settings.customColors = snapshot.settings.customColors;
+			this.savedEvents = snapshot.events;
+			const relevant = (events: CalendarEvent[]) => JSON.stringify(events.filter(event => event.countdown).map(event => [event.id, event.title, event.date, event.countdown!.collection]));
+			if (relevant(previous) !== relevant(this.savedEvents)) this.countdownSource?.changed();
+			try { this.refreshViews(); }
+			catch (error) { console.error('[MyCalendar] 日程已保存，界面刷新失败', error); }
+		});
+		this.saveQueue = job;
+		return job;
 	}
 
 	/** 新增或替换一个年份的在线安排（按更新时间取最新） */
