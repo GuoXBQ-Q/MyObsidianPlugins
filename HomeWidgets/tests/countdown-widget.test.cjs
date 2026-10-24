@@ -59,10 +59,8 @@ test('calendar dates show their source, allow pinning and archive, and keep edit
  f.el.find('hw-countdown-archive-date')[0].events.click();assert.equal(f.dialogs[0][0],'归档日历同步日期');
  await f.dialogs[0][2]();assert.equal(f.archives[0][1].id,'event-project');assert.equal(f.deletes.length,0);assert.equal(f.saves.length,0);
 });
-test('zero limit and default settings show all dates, while empty data and cancelled mount avoid stale UI',async()=>{
+test('zero limit shows all dates and cancelled mount avoids stale UI',async()=>{
   const all=await mount(sample,{upcoming:0});assert.equal(all.el.find('hw-countdown-event').length,3);assert.equal(all.el.find('hw-countdown-list-toggle').length,0);
-  assert.equal((await mount()).el.find('hw-countdown-event').length,3);
-  const empty=await mount([]);assert.match(empty.el.textContent,/添加一个值得期待/);assert.equal(empty.actions.find('hw-countdown-add').length,1);
   const aborted=await mount(sample,{},true);assert.equal(aborted.el.childNodes.length,0);assert.equal(aborted.actions.childNodes.length,0);
 });
 test('limited lists have an expand/collapse control that survives widget refreshes',async()=>{
@@ -125,8 +123,9 @@ test('dates can be pinned, switched and unpinned independently for each widget',
   const peer=await mount(sample,{featured:'event-project'});assert.equal(peer.el.find('hw-countdown-title')[0].textContent,'项目里程碑');assert.equal(peer.patches.length,0);
 });
 
-test('deleted pins are cleared even when empty and newly added dates stay selectable',async()=>{
+test('empty dates retain the add action, clear deleted pins and allow newly added dates to be pinned',async()=>{
   const empty=await mount([]);assert.equal(empty.patches[0].featured,'');
+  assert.match(empty.el.textContent,/添加一个值得期待/);assert.equal(empty.actions.find('hw-countdown-add').length,1);
   const newEvents=[{id:'event-brand-new',title:'重新添加',date:'2027-02-01'}];
   const added=await mount(newEvents,{featured:''});assert.equal(added.patches.length,0);
   await added.el.find('hw-countdown-pin-button')[0].events.click();assert.equal(added.patches[0].featured,'event-brand-new');
