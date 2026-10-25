@@ -8,16 +8,23 @@ function createLayoutEditSession(persisted){
   const memory=createLayoutStore({
     read:async()=>JSON.stringify(draft),
     update:async(path,transform)=>{draft=JSON.parse(transform(JSON.stringify(draft)));}
-  },bus,persisted.path);
+  },bus,persisted.registry);
   const enqueue=fn=>{const job=tail.catch(()=>{}).then(()=>{if(disposed)throw new Error('首页已关闭');return fn();});tail=job;return job;};
   const session={path:persisted.path,
-    load:async()=>draft?clone(draft):persisted.load(),
+    load:async()=>draft?persisted.validate(clone(draft)):persisted.load(),
     subscribe:fn=>{const off=[persisted.subscribe(fn),memory.subscribe(fn),bus.on('draft',fn)];return ()=>off.forEach(f=>f());},
     begin:()=>enqueue(async()=>{if(draft)return;base=clone(await persisted.load());draft=clone(base);changed();}),
     commit:()=>enqueue(async()=>{if(!draft)return;await persisted.saveDraft(base,draft,[...removals.values()]);base=null;draft=null;removals.clear();changed();}),
     discard:()=>enqueue(()=>{base=null;draft=null;removals.clear();changed();}),
     describeTaskRemoval:id=>enqueue(()=>persisted.describeTaskRemoval(id,draft?clone(draft):undefined)),
     remove:(id,plan)=>enqueue(async()=>{await (draft?memory:persisted).remove(id,draft?undefined:plan);if(draft&&plan)removals.set(id,clone(plan));}),
+    add:widget=>enqueue(async()=>{
+      if(draft){
+        const definition=persisted.registry?.get(widget.type),multiple=definition?definition.supportsMultipleInstances===true:widget.type==='tasks';
+        if(!multiple&&(await persisted.load()).widgets.some(item=>item.type===widget.type))throw new Error('此单实例组件已添加，请先保存删除再新建');
+      }
+      return (draft?memory:persisted).add(widget);
+    }),
     // Completion changes are saved immediately, even while the layout is a draft.
     // Sanitize base and draft as well so discarding/merging cannot resurrect old hides.
     clearTaskHidden:(source,ids)=>enqueue(async()=>{
@@ -31,7 +38,7 @@ function createLayoutEditSession(persisted){
     dispose:()=>{disposed=true;base=null;draft=null;removals.clear();},
     get active(){return draft!==null;}
   };
-  for(const name of ['patchWidget','patchSettings','add','move','before','place','theme','page','typography']){
+  for(const name of ['patchWidget','patchSettings','move','before','place','theme','page','typography']){
     session[name]=(...args)=>enqueue(()=>(draft?memory:persisted)[name](...args));
   }
   return session;

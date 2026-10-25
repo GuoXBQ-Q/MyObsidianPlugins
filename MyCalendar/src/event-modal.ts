@@ -14,6 +14,8 @@ export class EventModal extends Modal {
 	private timeControl: ReturnType<typeof mountTimeFields> | null = null;
 	private colorControl: ReturnType<typeof mountColorPicker> | null = null;
 	private saving = false;
+	private countdownCleanup: (() => void) | null = null;
+	private countdownRefresh: (() => void) | null = null;
 
 	constructor(
 		app: App,
@@ -40,6 +42,7 @@ export class EventModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.countdownCleanup?.();
 		const { contentEl } = this;
 		contentEl.empty();
 		contentEl.addClass('mc-modal');
@@ -68,8 +71,7 @@ export class EventModal extends Modal {
 		setIcon(impIcon, 'star');
 		impRow.createSpan({ cls: 'mc-option-title', text: '重要事件' });
 
-		if (this.plugin.isCountdownAvailable()) this.renderCountdownSettings(contentEl);
-		else if (this.ev.countdown) contentEl.createEl('p', { cls: 'mc-countdown-help', text: '此日程已关联倒计时。Home Widgets 当前未连接，关联设置会保留，恢复连接后继续同步。' });
+		this.renderCountdownSettings(contentEl);
 
 		// 分类颜色
 		this.colorControl = mountColorPicker(contentEl, this.ev, this.plugin.settings);
@@ -103,7 +105,23 @@ export class EventModal extends Modal {
 	}
 
 	private renderCountdownSettings(contentEl: HTMLElement): void {
-		// 倒计时是 Home Widgets 的日期集合，以日程开始日为目标日期。
+		const region = contentEl.createDiv();
+		const notice = region.createEl('p', { cls: 'mc-countdown-help', text: 'Home Widgets 当前未连接。关联设置（含本次修改）会随日程保存，恢复连接后生效。', attr: { role: 'status' } });
+		let updateControls: ((available: boolean) => void) | null = null, everAvailable = false;
+		const refresh = () => {
+			const available = this.plugin.isCountdownAvailable();
+			if (available && !updateControls) updateControls = this.mountCountdownControls(region);
+			updateControls?.(available);
+			everAvailable ||= available;
+			notice.hidden = available || (!everAvailable && !this.ev.countdown);
+		};
+		this.countdownRefresh = refresh;
+		this.countdownCleanup = this.plugin.countdownSource?.subscribeAvailability(refresh) ?? null;
+		refresh();
+	}
+
+	private mountCountdownControls(contentEl: HTMLElement): (available: boolean) => void {
+		// 唯一倒计时列表使用日程开始日期。
 		const syncId = `mc-countdown-${this.ev.id}`;
 		const syncRow = this.timeControl!.optionsEl.createEl('label', { cls: 'mc-option-card', attr: { for: syncId } });
 		const syncCheck = syncRow.createEl('input', { type: 'checkbox', attr: { id: syncId, 'aria-label': '同步到倒计时', 'aria-description': '将日程标题与开始日期单向同步到 Home Widgets；取消同步或删除日程也会移除关联倒计时' } });
@@ -113,18 +131,20 @@ export class EventModal extends Modal {
 		syncRow.createSpan({ cls: 'mc-option-title', text: '同步到倒计时' });
 		const syncSettings = contentEl.createDiv('mc-countdown-settings');
 		syncSettings.hidden = !syncCheck.checked;
-		const collectionLabel = syncSettings.createEl('label', { cls: 'mc-label', text: '倒计时集合' });
-		const collectionInput = syncSettings.createEl('input', { cls: 'mc-input', type: 'text', attr: { id: `${syncId}-collection`, 'aria-label': '倒计时集合', 'aria-describedby': `${syncId}-help`, placeholder: 'default' } });
-		collectionLabel.htmlFor = collectionInput.id;
-		collectionInput.value = this.ev.countdown?.collection ?? 'default';
-		syncSettings.createEl('p', { cls: 'mc-countdown-help', text: '填写倒计时组件使用的「日期集合」（默认为 default）。按开始日期计算天数，不包含具体时间；修改日程会同步更新，取消同步或删除日程也会移除关联倒计时。需启用支持联动的 Home Widgets，重新连接后自动读取最新日程。', attr: { id: `${syncId}-help` } });
+		syncSettings.createEl('p', { cls: 'mc-countdown-help', text: '按开始日期计算天数；修改日程会更新倒计时，取消同步或删除日程会移除关联日期。', attr: { id: `${syncId}-help` } });
+		let available = true;
+		const updateVisibility = () => {
+			syncRow.hidden = !available;
+			syncSettings.hidden = !available || !syncCheck.checked;
+			syncCheck.disabled = this.saving;
+		};
 		const updateSync = () => {
-			syncSettings.hidden = !syncCheck.checked;
-			if (syncCheck.checked) this.ev.countdown = { collection: collectionInput.value.trim() };
+			if (syncCheck.checked) this.ev.countdown = true;
 			else delete this.ev.countdown;
+			updateVisibility();
 		};
 		syncCheck.addEventListener('change', updateSync);
-		collectionInput.addEventListener('input', updateSync);
+		return connected => { available = connected; updateVisibility(); };
 	}
 
 	private async save(): Promise<void> {
@@ -153,10 +173,12 @@ export class EventModal extends Modal {
 		finally {
 			this.saving = false;
 			controls.forEach((control, index) => { control.disabled = disabled[index]; });
+			this.countdownRefresh?.();
 		}
 	}
 
 	onClose(): void {
+		this.countdownCleanup?.(); this.countdownCleanup = null; this.countdownRefresh = null;
 		this.timeControl?.dispose();
 		this.colorControl?.dispose();
 		this.contentEl.empty();

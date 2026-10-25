@@ -5,11 +5,11 @@ const {createLayoutEditSession}=require('../src/core/layout-edit-session');
 const {createActivityService,calendarRange}=require('../src/services/activity');
 const {localDay}=require('../src/services/date');
 const {Bus}=require('../src/core/lifecycle');
-const source='tasks.md',layoutPath='layout.json',key=id=>JSON.stringify([source,id]);
+const source='tasks.md',layoutPath='Home/widgets.json',key=id=>JSON.stringify([source,id]);
 function fixture(text,integrations){
-  const files=new Map([[source,text],[layoutPath,JSON.stringify({version:2,theme:'native',widgets:['visible','unmounted'].map(id=>({id,type:'tasks',span:4,hidden:id==='unmounted',settings:{source,hiddenTaskKeys:[key('p'),key('a'),key('b')]}}))})]]),queues=new Map();
+  const files=new Map([[source,text],[layoutPath,JSON.stringify({version:3,theme:'native',widgets:['visible','unmounted'].map(id=>({id,type:'tasks',span:4,hidden:id==='unmounted',settings:{source,hiddenTaskKeys:[key('p'),key('a'),key('b')]}}))})]]),queues=new Map();
   const io={exists:async p=>files.has(p),read:async p=>files.get(p),update:async(p,fn)=>{const next=(queues.get(p)||Promise.resolve()).catch(()=>{}).then(()=>files.set(p,fn(files.get(p))));queues.set(p,next);await next;}};
-  const store=createLayoutStore(io,new Bus(),layoutPath),service=createTaskService(io,integrations);service.onReopen((p,ids)=>store.clearTaskHidden(p,ids));
+  const store=createLayoutStore(io,new Bus()),service=createTaskService(io,integrations);service.onReopen((p,ids)=>store.clearTaskHidden(p,ids));
   return {files,io,store,service,list:()=>service.list(source),get:async id=>(await service.list(source)).find(task=>task.id===id)};
 }
 const group='- [ ] 父项 #area/work ^p\n  说明\n  - [x] A ^a\n  - [ ] B 📅 2026-11-01 ^b\n- [x] 已完成独立项 #area/work ^done\n- [ ] 另一主项 #area/work ^other\n';

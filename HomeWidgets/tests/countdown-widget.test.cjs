@@ -22,7 +22,7 @@ const sample=[
 ];
 async function mount(events=sample,settings={},aborted=false,local={},source={}){
   const el=new Node('body'),actions=new Node('header'),dialogs=[],saves=[],timers=[],deletes=[],archives=[],restores=[],refreshes=[],patches=[],errors=[];
-  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{sourceStatus:async()=>null,canClearFeatured:async()=>true,list:async(source,{includeArchived=false}={})=>includeArchived?events:events.filter(e=>!e.archived),save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args),archive:async(...args)=>archives.push(args),restore:async(...args)=>restores.push(args)}},forms:{show:(...args)=>dialogs.push(args),confirm:(...args)=>dialogs.push(args)},notify:message=>errors.push(message),lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
+  const ctx={id:'test-countdown',local,doc,el,actions,config:{...widget.defaults,featured:'event-project',...settings},signal:{aborted},services:{events:{sourceStatus:async()=>null,canClearFeatured:async()=>true,list:async({includeArchived=false}={})=>includeArchived?events:events.filter(e=>!e.archived),save:async(...args)=>saves.push(args),remove:async(...args)=>deletes.push(args),archive:async(...args)=>archives.push(args),restore:async(...args)=>restores.push(args)}},forms:{show:(...args)=>dialogs.push(args),confirm:(...args)=>dialogs.push(args)},notify:message=>errors.push(message),lifetime:{interval:(...args)=>timers.push(args)},refresh:()=>refreshes.push(true),updateConfig:async patch=>patches.push(patch),run:async fn=>{try{return await fn();}catch(e){errors.push(e.message);}}};
   Object.assign(ctx.services.events,source);
   await widget.mount(ctx);return {ctx,el,actions,dialogs,saves,timers,deletes,archives,restores,refreshes,local,patches,errors};
 }
@@ -47,7 +47,7 @@ test('automatic selection chooses the closest future event, with today and expir
 test('add, hero edit and list edit continue saving through the date service',async()=>{
   const f=await mount();f.actions.find('hw-countdown-add')[0].events.click();assert.equal(f.dialogs[0][0],'添加关键日期');
   f.el.find('hw-countdown-edit')[0].events.click();await f.dialogs[1][3]({title:'新名称',date:'2026-11-02'});
-  assert.deepEqual(JSON.parse(JSON.stringify(f.saves[0])),['default',{title:'新名称',date:'2026-11-02',id:'event-project'}]);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.saves[0])),[{title:'新名称',date:'2026-11-02',id:'event-project'}]);
   f.el.find('hw-countdown-event')[0].events.click();assert.equal(f.dialogs[2][2].id,'event-weekend');
 });
 
@@ -57,7 +57,7 @@ test('calendar dates show their source, allow pinning and archive, and keep edit
  assert.equal(f.el.find('hw-countdown-delete').length,0);assert.equal(f.el.find('hw-countdown-pin-button').length,events.length);
  f.el.find('hw-countdown-event')[0].events.click();assert.match(f.errors[0],/MyCalendar/);assert.equal(f.dialogs.length,0);
  f.el.find('hw-countdown-archive-date')[0].events.click();assert.equal(f.dialogs[0][0],'归档日历同步日期');
- await f.dialogs[0][2]();assert.equal(f.archives[0][1].id,'event-project');assert.equal(f.deletes.length,0);assert.equal(f.saves.length,0);
+ await f.dialogs[0][2]();assert.equal(f.archives[0][0].id,'event-project');assert.equal(f.deletes.length,0);assert.equal(f.saves.length,0);
 });
 test('zero limit shows all dates and cancelled mount avoids stale UI',async()=>{
   const all=await mount(sample,{upcoming:0});assert.equal(all.el.find('hw-countdown-event').length,3);assert.equal(all.el.find('hw-countdown-list-toggle').length,0);
@@ -78,16 +78,16 @@ test('hero and expired rows expose separate delete controls and require confirma
   const f=await mount(),buttons=f.el.find('hw-countdown-delete');assert.equal(buttons.length,sample.length);
   assert.equal(f.el.find('hw-countdown-event').some(row=>row.find('hw-countdown-delete').length),false);
   buttons[0].events.click();assert.equal(f.deletes.length,0);assert.equal(f.archives.length,0);assert.equal(f.dialogs[0][5].description.content,'项目里程碑');
-  await f.dialogs[0][3]();assert.equal(f.deletes[0][0],'default');assert.equal(f.deletes[0][1].id,'event-project');assert.equal(f.refreshes.length,1);
+  await f.dialogs[0][3]();assert.equal(f.deletes[0][0].id,'event-project');assert.equal(f.refreshes.length,1);
   const expired=buttons.find(b=>b.attributes['aria-label']==='删除日期 已结束');expired.events.click();assert.equal(f.deletes.length,1);
-  await f.dialogs[1][3]();assert.equal(f.deletes[1][1].id,'event-old');
+  await f.dialogs[1][3]();assert.equal(f.deletes[1][0].id,'event-old');
   const withoutMain=await mount(sample.filter(e=>e.id!=='event-project'));assert.equal(withoutMain.el.find('hw-countdown-title')[0].textContent,'留给自己的周末');assert.equal(withoutMain.el.find('hw-countdown-pin')[0].textContent,'自动选择');assert.equal(withoutMain.patches[0].featured,'');
 });
 
 test('delete dialog offers archive without deleting, while archive failures do not refresh',async()=>{
   const f=await mount();f.el.find('hw-countdown-delete')[0].events.click();
   const options=f.dialogs[0][5];assert.equal(options.secondaryAction.label,'归档');
-  await options.secondaryAction.run();assert.equal(f.archives[0][0],'default');assert.equal(f.archives[0][1].id,'event-project');
+  await options.secondaryAction.run();assert.equal(f.archives[0][0].id,'event-project');
   assert.equal(f.deletes.length,0);assert.equal(f.refreshes.length,1);
   f.ctx.services.events.archive=async()=>{throw Error('保存失败');};
   await assert.rejects(options.secondaryAction.run(),/保存失败/);assert.equal(f.refreshes.length,1);
@@ -102,7 +102,7 @@ test('archived dates are excluded from hero and rows, clear old pins and can be 
   assert.match(empty.el.textContent,/添加一个值得期待/);assert.equal(empty.el.find('hw-countdown-hero').length,0);
   empty.actions.find('hw-countdown-archive')[0].events.click();const form=empty.dialogs[0];
   assert.equal(form[0],'已归档的日子');assert.equal(form[1][0].options.length,4);assert.equal(empty.restores.length,0);
-  await form[3]({id:'event-project'});assert.equal(empty.restores[0][1].id,'event-project');assert.equal(empty.refreshes.length,1);
+  await form[3]({id:'event-project'});assert.equal(empty.restores[0][0].id,'event-project');assert.equal(empty.refreshes.length,1);
   empty.ctx.services.events.restore=async()=>{throw Error('保存失败');};
   await assert.rejects(form[3]({id:'event-old'}),/保存失败/);assert.equal(empty.refreshes.length,1);
 });
@@ -153,9 +153,9 @@ test('pin controls reject stale dates, prevent duplicate writes and recover from
   f.ctx.signal.aborted=true;await pin.events.click();assert.equal(pin.disabled,false);
 });
 
-test('settings list date names and dates, including duplicate titles, for the selected collection',async()=>{
+test('settings list date names and dates, including duplicate titles, from the unique list',async()=>{
   const field=widget.fields.find(f=>f.key==='featured'),requests=[];
-  const options=await field.options({source:'second'},{events:{list:async source=>{requests.push(source);return [{id:'event-b',title:'生日',date:'2027-02-01'},{id:'event-a',title:'生日',date:'2026-12-01'}];}}});
-  assert.equal(requests[0],'second');assert.equal(options[0][0],'');
+  const options=await field.options({},{events:{list:async source=>{requests.push(source);return [{id:'event-b',title:'生日',date:'2027-02-01'},{id:'event-a',title:'生日',date:'2026-12-01'}];}}});
+  assert.deepEqual(requests,[undefined]);assert.equal(options[0][0],'');
   assert.deepEqual(Array.from(options.slice(1),pair=>Array.from(pair)),[['event-a','生日 · 2026-12-01'],['event-b','生日 · 2027-02-01']]);
 });

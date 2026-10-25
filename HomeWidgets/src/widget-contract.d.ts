@@ -4,10 +4,10 @@ export interface WidgetPluginSource {
   pluginName: string;
 }
 export interface HomeWidgetsAPI {
-  version: 2;
+  version: 3;
   /** Public registrations are always categorized as external plugin components. */
   registerWidget(definition: WidgetDefinition<any>, source: WidgetPluginSource): () => void;
-  listWidgetTypes(): Array<{ type: string; label: string }>;
+  listWidgetTypes(): Array<{ type: string; label: string; supportsMultipleInstances: boolean }>;
   /** Register a heatmap source; call the returned cleanup when unloading. */
   registerActivitySource(definition: ActivitySource): () => void;
 }
@@ -75,6 +75,8 @@ export interface WidgetDefinition<T = Record<string, unknown>> {
   type: string;
   label: string;
   subtitle?: string;
+  /** Defaults to false. A hidden instance still occupies the vault's single slot. */
+  supportsMultipleInstances?: boolean;
   icon?: string | ((doc: Document) => Element);
   span?: number;
   frameless?: boolean; // hide the header, independently of the frame

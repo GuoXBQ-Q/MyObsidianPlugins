@@ -2,7 +2,7 @@ const {Plugin,MarkdownRenderChild,MarkdownRenderer,Component,Notice,parseYaml,Sc
 const {Bus}=require('./core/lifecycle');
 const {WidgetRegistry}=require('./core/registry');
 const {createHost}=require('./core/host');
-const {createLayoutStore}=require('./services/layout');
+const {createLayoutStore,DEFAULT_PATH}=require('./services/layout');
 const {createServices}=require('./services');
 const {createVaultIO}=require('./adapters/vault');
 const {createIntegrations}=require('./adapters/integrations');
@@ -18,8 +18,8 @@ const {createPluginUpdater}=require('../../shared/plugin-updater');
 class HomeRenderChild extends MarkdownRenderChild {
   constructor(el,plugin,path,sourcePath){super(el);this.plugin=plugin;this.path=path;this.sourcePath=sourcePath;}
   onload(){let unloaded=false;this.plugin.renders.add(this);this.register(()=>{unloaded=true;this.host?.dispose();this.plugin.renders.delete(this);});
-    const store=createLayoutStore(this.plugin.io,this.plugin.bus,this.path);
-    this.ready=store.initialize().then(()=>{if(unloaded)return;this.host=createHost(this.containerEl,{registry:this.plugin.registry,store,services:this.plugin.services,platform:{vaultId:this.plugin.app.vault.getName(),preview:false},sourcePath:this.sourcePath});return this.host.ready;}).catch(e=>{if(!unloaded)this.containerEl.createEl('p',{text:'Home Widgets：'+e.message});});
+    const store=createLayoutStore(this.plugin.io,this.plugin.bus,this.plugin.registry);
+    this.ready=store.initialize().then(async()=>{if(unloaded)return;this.host=createHost(this.containerEl,{registry:this.plugin.registry,store,services:this.plugin.services,platform:{vaultId:this.plugin.app.vault.getName(),preview:false},sourcePath:this.sourcePath});await this.host.ready;if(this.plugin.pendingWidget)await this.host.locate(this.plugin.pendingWidget);}).catch(e=>{if(!unloaded)this.containerEl.createEl('p',{text:'Home Widgets：'+e.message});});
   }
 }
 class HomeWidgetsPlugin extends Plugin {
@@ -35,9 +35,10 @@ class HomeWidgetsPlugin extends Plugin {
     this.services=createServices(this.io,this.bus,this.integrations,createCountdownService(createPersistentEventService(this.dataStore,this.bus),this.calendar));
     this.updater=createPluginUpdater(this,require('obsidian'));
     this.registerMarkdownCodeBlockProcessor('home-widgets',(source,el,ctx)=>{
-      let settings;try{settings=source.trim()?parseYaml(source):{};if(settings===null)settings={};if(typeof settings!=='object'||Array.isArray(settings))throw new Error('代码块应填写 layout: Home/widgets.json');}
+      let settings;try{settings=source.trim()?parseYaml(source):{};if(settings===null)settings={};assertFields(settings,['layout','focus'],'首页代码块');if(settings.layout!==undefined&&settings.layout!==DEFAULT_PATH)throw new Error('只支持唯一首页布局：'+DEFAULT_PATH);if(settings.focus!==undefined&&(typeof settings.focus!=='string'||!settings.focus.trim()))throw new Error('focus 应填写首页组件 ID');}
       catch(e){el.createEl('p',{text:'Home Widgets 配置错误：'+e.message});return;}
-      ctx.addChild(new HomeRenderChild(el,this,settings.layout||'Home/widgets.json',ctx.sourcePath));
+      if(settings.focus){const button=el.createEl('button',{text:settings.focus==='ideas'?'打开灵感收件箱':'打开首页并定位组件'});button.addEventListener('click',()=>this.openWidget(settings.focus).catch(error=>new Notice(error.message)));return;}
+      ctx.addChild(new HomeRenderChild(el,this,DEFAULT_PATH,ctx.sourcePath));
     });
     for(const event of ['modify','create','delete'])this.registerEvent(this.app.vault.on(event,file=>{if(file?.path)this.bus.changed(file.path);}));
     this.registerEvent(this.app.vault.on('rename',(file,old)=>{this.bus.changed(old);this.bus.changed(file.path);}));
@@ -48,13 +49,20 @@ class HomeWidgetsPlugin extends Plugin {
     const settingsTab=new HomeSettings(this.app,this);
     this.addSettingTab(settingsTab);this.register(()=>settingsTab.hide());
     // Public extension API: returns an unregister function. Keep ownership with the caller.
-    this.api={version:2,registerWidget:(definition,source)=>{
+    this.api={version:3,registerWidget:(definition,source)=>{
       assertFields(source,['pluginId','pluginName'],'组件来源');
       if(typeof source.pluginId!=='string'||!source.pluginId.trim()||typeof source.pluginName!=='string'||!source.pluginName.trim())throw new Error('注册组件必须提供 pluginId 和 pluginName');
       const unregister=this.registry.register(definition,{pluginId:source.pluginId,pluginName:source.pluginName,kind:'external'});this.bus.emit('registry');return ()=>{unregister();this.bus.emit('registry');};
-    },listWidgetTypes:()=>this.registry.list().map(d=>({type:d.type,label:d.label})),registerActivitySource:definition=>this.services.activity.registerSource(definition)};
+    },listWidgetTypes:()=>this.registry.list().map(d=>({type:d.type,label:d.label,supportsMultipleInstances:d.supportsMultipleInstances===true})),registerActivitySource:definition=>this.services.activity.registerSource(definition)};
     this.calendar.start();
   }
   saveSettings(){return this.dataStore.update(data=>({...data,homeFile:this.settings.homeFile}));}
+  async openWidget(id){
+    const store=createLayoutStore(this.io,this.bus,this.registry),layout=await store.load(),item=layout.widgets.find(item=>item.id===id);
+    if(!item)throw new Error('首页中找不到组件：'+id);
+    if(item.hidden)await store.patchWidget(id,{hidden:false});
+    this.pendingWidget=id;await this.app.workspace.openLinkText(this.settings.homeFile,'',false);
+    for(const render of this.renders){await render.ready;await render.host?.locate(id);}
+  }
 }
 module.exports=HomeWidgetsPlugin;

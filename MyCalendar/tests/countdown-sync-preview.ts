@@ -18,7 +18,7 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 let homeData: any = {}, calendarData: any = { events: [], settings: DEFAULT_SETTINGS, fetchedHolidays: [] };
 let failCalendar = false, failHome = false, failSource = false, connected = true;
 const bus = new Bus(), registry = new WidgetRegistry(); registry.register(countdown);
-registry.register({ type: 'draft-editor', label: '编辑保护', defaults: {}, watch: () => ['countdown:default'], mount(ctx: any) {
+registry.register({ type: 'draft-editor', label: '编辑保护', defaults: {}, watch: () => ['countdown'], mount(ctx: any) {
 	const input = document.createElement('textarea'); input.setAttribute('aria-label', '未保存的编辑内容'); input.value = '初始内容';
 	const action = document.createElement('button'); action.textContent = '编辑区操作'; ctx.el.append(input, action);
 } });
@@ -53,16 +53,15 @@ const renderInner = async () => {
 };
 let renderQueue = Promise.resolve();
 const render = () => { const job = renderQueue.catch(() => {}).then(renderInner); renderQueue = job; return job; };
-bus.on('countdown:default', () => { void render(); }); bus.on('calendar-source', () => { void render(); });
+bus.on('countdown', () => { void render(); }); bus.on('calendar-source', () => { void render(); });
 const mountHost = async (container: HTMLElement) => {
-	let layout = JSON.stringify({ version: 2, theme: 'native', widgets: [
+	let layout = JSON.stringify({ version: 3, theme: 'native', widgets: [
 		{ id: 'host-countdown', type: 'countdown', title: '实际宿主倒计时', span: 12, settings: {} },
 		{ id: 'host-editor', type: 'draft-editor', title: '编辑保护', span: 12, settings: {} },
 		{ id: 'calendar-one', type: 'my-calendar', title: '日历一', span: 6, settings: {} },
-		{ id: 'calendar-two', type: 'my-calendar', title: '日历二', span: 6, settings: {} },
 	] });
 	const io = { read: async () => layout, update: async (_path: string, update: (text: string) => string) => { layout = update(layout); }, resource: (path: string) => path };
-	const store = createLayoutStore(io, bus), instance = createHost(container, { registry, store, services: { io, bus, events: dates, tasks: { onReopen: () => () => {} } } });
+	const store = createLayoutStore(io, bus, registry), instance = createHost(container, { registry, store, services: { io, bus, events: dates, tasks: { onReopen: () => () => {} } } });
 	await instance.ready; return { ...instance, removeFirstCalendar: () => store.remove('calendar-one') };
 };
 document.getElementById('new')!.addEventListener('click', () => open());

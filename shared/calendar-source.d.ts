@@ -1,8 +1,8 @@
-export const CALENDAR_SOURCE_VERSION: 1;
-export interface CalendarCountdown { id: string; title: string; date: string; collection: string; }
+export const CALENDAR_SOURCE_VERSION: 2;
+export interface CalendarCountdown { id: string; title: string; date: string; }
 export interface CalendarSnapshot { revision: number; events: CalendarCountdown[]; }
 export interface CalendarSource {
-  readonly version: 1;
+  readonly version: 2;
   getSnapshot(): Promise<CalendarSnapshot>;
   subscribe(listener: () => void): () => void;
   registerDisplayCapability(): () => void;

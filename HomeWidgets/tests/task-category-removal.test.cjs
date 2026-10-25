@@ -9,7 +9,7 @@ const source='Home/tasks.md',layoutPath='Home/widgets.json';
 const sample='# 待办\r\n- [ ] 工作一 #task #area/work 📅 2026-11-01 ^one\r\n- [x] 已完成 #area/work ✅ 2026-10-18 ^done\r\n- [x] 隐藏任务 #area/work ^hidden\r\n- [ ] 生活 #area/life ^life\r\n```md\r\n- [ ] 示例 #area/work ^example\r\n```\r\n';
 function fixture(text=sample){
   const one={id:'work',type:'tasks',title:'工作待办',span:4,settings:{source,area:'work',showCompleted:false,limit:1,hiddenTaskKeys:['hidden']}},peer={...one,id:'peer',title:'同分类副本',hidden:true};
-  const original=JSON.stringify({version:2,theme:'native',widgets:[one,peer]}),files=new Map([[source,text],[layoutPath,original]]),writes=[],bus=new Bus();let hook;
+  const original=JSON.stringify({version:3,theme:'native',widgets:[one,peer]}),files=new Map([[source,text],[layoutPath,original]]),writes=[],bus=new Bus();let hook;
   const io={read:async path=>{if(!files.has(path))throw new Error('missing '+path);return files.get(path);},
     update:async(path,fn)=>{if(hook)await hook(path);const next=fn(files.get(path));files.set(path,next);writes.push(path);bus.changed(path);},
     create:async(path,text)=>{assert(!files.has(path));files.set(path,text);}};

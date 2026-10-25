@@ -62,6 +62,7 @@ export default class MyCalendarPlugin extends Plugin {
 		} | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings ?? {});
 		this.events = Array.isArray(data?.events) ? data.events : [];
+		if (this.events.some(event => event.countdown !== undefined && event.countdown !== true)) throw new Error('倒计时关联格式不受支持，请先整理数据');
 		this.savedEvents = JSON.parse(JSON.stringify(this.events));
 		this.fetchedHolidays = Array.isArray(data?.fetchedHolidays) ? data.fetchedHolidays : [];
 		setFetchedArrangements(this.fetchedHolidays);
@@ -74,10 +75,7 @@ export default class MyCalendarPlugin extends Plugin {
 		const draft: CalendarEvent = JSON.parse(JSON.stringify(event));
 		if (!draft.title.trim()) return Promise.reject(new Error('请先填写日程标题'));
 		draft.title = draft.title.trim();
-		if (draft.countdown && (!draft.countdown.collection.trim() || /[\\/]/.test(draft.countdown.collection) || /\.md$/i.test(draft.countdown.collection))) {
-			return Promise.reject(new Error('倒计时集合请填写名称（例如 default），不能使用笔记路径'));
-		}
-		if (draft.countdown) draft.countdown.collection = draft.countdown.collection.trim();
+		if (draft.countdown !== undefined && draft.countdown !== true) return Promise.reject(new Error('倒计时关联格式不受支持'));
 		return this.persist(events => {
 			const current = events.find(item => item.id === draft.id);
 			if (expected ? !current || JSON.stringify(current) !== JSON.stringify(expected) : !!current) throw new Error('日程已变化，请重新打开后再编辑');
@@ -105,7 +103,7 @@ export default class MyCalendarPlugin extends Plugin {
 			if (change) this.events = snapshot.events;
 			if (customColor) this.settings.customColors = snapshot.settings.customColors;
 			this.savedEvents = snapshot.events;
-			const relevant = (events: CalendarEvent[]) => JSON.stringify(events.filter(event => event.countdown).map(event => [event.id, event.title, event.date, event.countdown!.collection]));
+			const relevant = (events: CalendarEvent[]) => JSON.stringify(events.filter(event => event.countdown).map(event => [event.id, event.title, event.date]));
 			if (relevant(previous) !== relevant(this.savedEvents)) this.countdownSource?.changed();
 			try { this.refreshViews(); }
 			catch (error) { console.error('[MyCalendar] 日程已保存，界面刷新失败', error); }

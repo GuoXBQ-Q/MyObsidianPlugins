@@ -1136,7 +1136,7 @@
 	margin: 12px 0 16px;
 }
 .mc-countdown-settings { margin: 0 0 16px; padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; }
-.mc-countdown-settings[hidden] { display: none; }
+.mc-countdown-settings[hidden], .mc-countdown-help[hidden], .mc-event-options .mc-option-card[hidden] { display: none; }
 .mc-countdown-help { margin: 8px 0 0; color: var(--text-muted); font-size: .75em; line-height: 1.7; }
 .mc-event-options .mc-option-card {
 	display: inline-flex; align-items: center; gap: 8px;

@@ -132,12 +132,15 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
     }catch(e){notify('读取布局失败：'+e.message,true);}
     finally{syncing=false;if(again){again=false;sync();}}
   }
-  function addWidget() {
+  async function locate(id){await sync();const el=records.get(id)?.el;if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.tabIndex=-1;el.focus({preventScroll:true});}}
+  async function addWidget() {
     if(!registry.list().length){notify('没有可用的组件类型');return;}
-    const fields=[{key:'type',label:'组件类型',type:'select',options:registry.list().map(d=>[d.type,d.label])},{key:'title',label:'组件名称（可选）'}];
+    const current=await store.load();
+    if(lifetime.signal.aborted)return;
+    const fields=[{key:'type',label:'组件类型',type:'select',options:registry.list().map(d=>[d.type,d.label+(d.supportsMultipleInstances!==true&&current.widgets.some(item=>item.type===d.type)?'（已添加）':'')])},{key:'title',label:'组件名称（可选）'}];
     let choice;
     const dialog=forms.show('添加独立小组件',fields,{},value=>{if(!registry.get(value.type))throw new Error('此组件类型已断开，请重新选择');choice=value;},'下一步',{successMessage:'请配置新组件'});
-    dialog.addEventListener('close',()=>{if(choice&&!lifetime.signal.aborted)run(()=>showNewWidget(forms,registry,store,choice.type,{title:choice.title,draft:editing}));},{once:true});
+    dialog.addEventListener('close',()=>{if(choice&&!lifetime.signal.aborted)run(()=>showNewWidget(forms,registry,store,choice.type,{title:choice.title,draft:editing,locate,isActive:()=>!lifetime.signal.aborted}));},{once:true});
   }
   function showHidden() {
     const hidden=layout.widgets.filter(w=>w.hidden);
@@ -181,13 +184,13 @@ function createHost(container,{registry,store,services,platform={},sourcePath='h
   },true);
   toolbar.append(button(doc,'◌ 外观',()=>forms.show('首页外观',[{key:'theme',label:'主题',type:'select',options:[['native','跟随 Obsidian'],['lavender','紫藤花园'],['sage','森林来信'],['rose','樱花手帐']]},{key:'maxWidth',label:'页面最大宽度',type:'select',options:[['','默认（1440px）'],['full','跟随窗口宽度'],['1600','固定 1600px'],['1920','固定 1920px'],['2560','固定 2560px']]}],layout||{},v=>store.page({theme:v.theme,maxWidth:v.maxWidth===''?undefined:v.maxWidth==='full'?'full':Number(v.maxWidth)}))),
     editButton,
-    button(doc,'＋ 添加组件',addWidget),button(doc,'恢复隐藏',showHidden));
+    button(doc,'＋ 添加组件',()=>run(addWidget)),button(doc,'恢复隐藏',showHidden));
   lifetime.own(store.subscribe(sync));
   lifetime.own(services.bus.on('file:'+store.path,sync));
   lifetime.own(services.bus.on('registry',()=>{for(const record of [...records.values()])if(record.def!==registry.get(record.item.type))disposeRecord(record);sync();}));
   lifetime.listen(root,'close',()=>{for(const record of records.values())if(record.pending){record.pending=false;refreshWidget(record);}},true);
   lifetime.own(()=>{clearTimeout(toastTimer);if(editOwners.get(doc)===root)editOwners.delete(doc);store.dispose();forms.dispose();for(const record of [...records.values()])disposeRecord(record);root.remove();});
   const ready=sync();
-  return {root,ready,sync,dispose:()=>lifetime.dispose()};
+  return {root,ready,sync,locate,dispose:()=>lifetime.dispose()};
 }
 module.exports={createHost};

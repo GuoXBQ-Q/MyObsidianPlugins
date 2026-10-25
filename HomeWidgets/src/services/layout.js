@@ -5,15 +5,26 @@ const {cssClasses}=require('../core/appearance');
 const {taskScope,commitCategoryRemoval}=require('./task-category-removal');
 const {parseTasks}=require('./tasks');
 const {assertFields}=require('../core/format');
-function validateLayout(value) {
+const builtinTypes=new Set(['banner','countdown','tasks','capture','ideas','shortcuts','summary','heatmap','command','my-calendar']);
+const removedTypes=new Set(['dataview','tasks-query','markdown']);
+function validateLayout(value,registry) {
   assertFields(value,['version','theme','widgets','typography','maxWidth'],'布局');
-  if(value.version!==2||!Array.isArray(value.widgets))throw new Error('Home Widgets 布局格式不正确，需要 version: 2');
+  if(value.version!==3||!Array.isArray(value.widgets))throw new Error('Home Widgets 布局格式不正确，需要 version: 3；请先整理旧布局');
   if(!['lavender','rose','sage','native'].includes(value.theme))throw new Error('未知主题');
   validateTypography(value.typography);
   if(value.maxWidth!==undefined&&value.maxWidth!=='full'&&(typeof value.maxWidth!=='number'||!Number.isInteger(value.maxWidth)||value.maxWidth<640||value.maxWidth>7680))throw new Error('页面宽度应为 640–7680 的整数或 "full"');
   const ids=new Set();
   for(const item of value.widgets){assertFields(item,['id','type','title','span','hidden','tint','background','height','cssClasses','settings'],'组件实例');cssClasses(item.cssClasses);}
   for(const item of value.widgets){if(!/^[\w-]+$/.test(item.id)||ids.has(item.id))throw new Error('组件实例 ID 无效或重复');ids.add(item.id);if(typeof item.type!=='string'||!item.type)throw new Error('组件缺少类型');if(!Number.isInteger(item.span)||item.span<1||item.span>12)throw new Error('组件宽度应为 1–12');if(item.height!==undefined&&(!Number.isInteger(item.height)||item.height<80||item.height>2000))throw new Error('组件固定高度应为 80–2000 的整数，留空则自适应内容');if(item.settings!==undefined&&(typeof item.settings!=='object'||item.settings===null||Array.isArray(item.settings)))throw new Error('组件 settings 必须为对象');}
+  const types=new Set();
+  for(const item of value.widgets){
+    if(removedTypes.has(item.type))throw new Error('组件已移除，请先备份并整理配置：'+item.type);
+    if(item.type==='countdown'&&item.settings&&Object.hasOwn(item.settings,'source'))throw new Error('倒计时不再支持日期集合，请先整理配置');
+    const definition=registry?.get(item.type);
+    // Disconnected external types retain their configuration until the provider returns.
+    if((definition?definition.supportsMultipleInstances!==true:builtinTypes.has(item.type)&&item.type!=='tasks')&&types.has(item.type))throw new Error('单实例组件重复：'+item.type+'；已保留全部配置，请先处理冲突');
+    types.add(item.type);
+  }
   return value;
 }
 // Keep unrelated settings changed by another view; never overwrite conflicting edits.
@@ -33,14 +44,20 @@ function mergeLayoutDraft(base,draft,current){
   }
   return validateLayout(merge(base,draft,current));
 }
-function createLayoutStore(io,bus,path=DEFAULT_PATH) {
-  async function load(){return validateLayout(JSON.parse(await io.read(path)));}
+function createLayoutStore(io,bus,registry) {
+  if(typeof registry==='string')throw new Error('只支持唯一首页布局：'+DEFAULT_PATH);
+  const path=DEFAULT_PATH,validate=value=>validateLayout(value,registry);
+  async function load(){return validate(JSON.parse(await io.read(path)));}
   async function change(fn,plans=[]){
-    const update=text=>JSON.stringify(validateLayout(fn(JSON.parse(text))),null,2)+'\n';
+    const update=text=>{
+      const current=validate(JSON.parse(text)),next=validate(fn(current));
+      if(registry)for(const item of next.widgets)if(!current.widgets.some(before=>before.id===item.id&&before.type===item.type)&&!registry.get(item.type))throw new Error('此组件类型尚未连接，无法新建实例');
+      return JSON.stringify(next,null,2)+'\n';
+    };
     if(plans.length)await commitCategoryRemoval(io,path,update,plans);else await io.update(path,update);
     bus.emit('layout:'+path);
   }
-  return {path,load,
+  return {path,load,registry,validate,
     saveDraft:(base,draft,plans=[])=>change(current=>mergeLayoutDraft(base,draft,current),plans),
     async describeTaskRemoval(id,layout){
       layout=layout||await load();const item=layout.widgets.find(w=>w.id===id);
@@ -50,7 +67,7 @@ function createLayoutStore(io,bus,path=DEFAULT_PATH) {
       const peers=layout.widgets.filter(w=>w.id!==id&&w.type==='tasks').filter(w=>{const scope=taskScope(w);return scope.source===source&&scope.area===area;}).map(w=>w.title||w.id);
       return {source,area,snapshot,count,peers};
     },
-    async initialize(){if(await io.exists(path))return load();const next={version:2,theme:'native',widgets:[]};await io.create(path,JSON.stringify(next,null,2)+'\n');return next;},
+    async initialize(){if(await io.exists(path))return load();const next={version:3,theme:'native',widgets:[]};try{await io.create(path,JSON.stringify(next,null,2)+'\n');}catch(error){if(!await io.exists(path))throw error;}return load();},
     patchWidget:(id,patch)=>change(data=>({...data,widgets:data.widgets.map(w=>w.id===id?{...w,...patch,settings:patch.settings?{...w.settings,...patch.settings}:w.settings}:w)})),
     patchSettings:(id,patch)=>change(data=>({...data,widgets:data.widgets.map(w=>w.id===id?{...w,settings:{...w.settings,...(typeof patch==='function'?patch(w.settings||{}):patch)}}:w)})),
     async clearTaskHidden(source,ids){
@@ -58,7 +75,7 @@ function createLayoutStore(io,bus,path=DEFAULT_PATH) {
       if(!current.widgets.some(w=>w.type==='tasks'&&w.settings?.hiddenTaskKeys?.some(key=>keys.has(key))))return;
       await change(data=>({...data,widgets:data.widgets.map(w=>w.type==='tasks'&&Array.isArray(w.settings?.hiddenTaskKeys)?{...w,settings:{...w.settings,hiddenTaskKeys:w.settings.hiddenTaskKeys.filter(key=>!keys.has(key))}}:w)}));
     },
-    add:widget=>change(data=>({...data,widgets:[...data.widgets,widget]})),
+    add:widget=>change(data=>{if(registry&&!registry.get(widget.type))throw new Error('此组件类型尚未连接，无法新建实例');return {...data,widgets:[...data.widgets,widget]};}),
     remove:(id,plan)=>change(data=>{
       const item=data.widgets.find(w=>w.id===id);
       if(plan){

@@ -22,7 +22,7 @@ async function main(){
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'build/preview.js'),'utf8')});
     await page.evaluate(async()=>{
       const widgets=[['work-primary','工作待办','work'],['work-mirror','工作待办 · 另一实例','work'],['life','日常琐事','life']].map(([id,title,area])=>({id,type:'tasks',title,span:4,height:380,settings:{source:'Home/tasks.md',area,showCompleted:true,limit:50}}));
-      window.files=new Map([['Home/widgets.json',JSON.stringify({version:2,theme:'native',widgets})],['Home/tasks.md','- [ ] 进行中的任务 #area/work ^active\n'+Array.from({length:25},(_,i)=>'- [x] 已完成任务 '+(i+1)+' #area/work ^done-'+i).join('\n')+'\n- [x] 生活事项 #area/life ^life-task\n']]);
+      window.files=new Map([['Home/widgets.json',JSON.stringify({version:3,theme:'native',widgets})],['Home/tasks.md','- [ ] 进行中的任务 #area/work ^active\n'+Array.from({length:25},(_,i)=>'- [x] 已完成任务 '+(i+1)+' #area/work ^done-'+i).join('\n')+'\n- [x] 生活事项 #area/life ^life-task\n']]);
       const revisions=new Map();
       window.fetch=async(url,options)=>{
         const request=JSON.parse(options.body),p=request.path;let result;

@@ -1,4 +1,4 @@
-const {schema,validate}=require('./persistent-events');
+const {schema}=require('./persistent-events');
 const {assertFields}=require('../core/format');
 const {calendarId}=require('../../../shared/calendar-source');
 function statesOf(state){
@@ -14,31 +14,17 @@ function statesOf(state){
 function createCalendarDisplayStore(data){
   return {
     async read(){
-      const root=await data.read(),state=schema(root),states=statesOf(state),legacy=[];
-      for(const collection of Object.values(state.collections)){validate(collection.events);legacy.push(...collection.events.filter(event=>event.calendarEventId));}
-      return {states,legacy};
+      return {states:statesOf(schema(await data.read()))};
     },
     async reconcile(events,isCurrent=()=>true){
       const active=new Set(events.map(event=>calendarId(event.id)));
       const result=await data.update(root=>{
         if(!isCurrent())return root;
-        const state=schema(root),saved=statesOf(state),states={},collections={...state.collections},seen=new Set();
+        const state=schema(root),saved=statesOf(state),states={};
         for(const [key,value] of Object.entries(saved))if(active.has(key))states[key]={...value};
-        for(const [name,collection] of Object.entries(state.collections)){
-          validate(collection.events);
-          for(const event of collection.events)if(event.calendarEventId){
-            const key=calendarId(event.calendarEventId);
-            if(seen.has(key))throw new Error('旧日程关联重复，转换已停止，原数据已保留');seen.add(key);
-            if(active.has(key)&&!Object.hasOwn(saved,key)){
-              const value={};if(event.id!==key)value.id=event.id;if(event.archived)value.archived=true;
-              if(Object.keys(value).length)states[key]=value;
-            }
-          }
-          collections[name]={...collection,events:collection.events.filter(event=>!event.calendarEventId)};
-        }
-        const next={...state,collections};
+        const next={...state};
         if(Object.keys(states).length)next.calendarDisplay={version:1,states};else delete next.calendarDisplay;
-        if(root.countdowns===undefined&&!Object.keys(collections).length&&!Object.keys(states).length)return root;
+        if(root.countdowns===undefined&&!Object.keys(states).length)return root;
         return {...root,countdowns:next};
       });
       return statesOf(schema(result));

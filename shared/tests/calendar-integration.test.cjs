@@ -2,9 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),vm=require(
 const fs=require('node:fs/promises'),path=require('node:path');
 const clone=value=>JSON.parse(JSON.stringify(value));
 const personal={id:'event-personal',title:'独立日期',date:'2027-01-01',start:'',area:''};
-const linked={id:'meeting',title:'唯一保存的日程',date:'2026-11-05',endDate:'2026-11-08',startTime:'',endTime:'',allDay:true,color:'#3788d8',note:'私密备注',countdown:{collection:'default'}};
+const linked={id:'meeting',title:'唯一保存的日程',date:'2026-11-05',endDate:'2026-11-08',startTime:'',endTime:'',allDay:true,color:'#3788d8',note:'私密备注',countdown:true};
 async function fixture(t,initial={}){
-  const disk={'home-widgets':{countdowns:{version:1,collections:{default:{events:[personal]}}}},'my-calendar':{events:[]},...clone(initial)};
+  const disk={'home-widgets':{countdowns:{version:2,events:[personal]}},'my-calendar':{events:[]},...clone(initial)};
   const writes={'home-widgets':0,'my-calendar':0},fail=new Set(),loaded=new Set();
   class Component {
     constructor(){this.cleanups=[];this.active=true;}
@@ -30,7 +30,7 @@ async function fixture(t,initial={}){
   function stop(id){const plugin=app.plugins.plugins[id];app.plugins.enabledPlugins.delete(id);delete app.plugins.plugins[id];plugin?.unload();loaded.delete(plugin);}
   t.after(()=>{for(const plugin of loaded)plugin.unload();});
   return {disk,writes,fail,app,stop,async start(id){const plugin=new entries[id](app,{id,version:'0.0.0'});loaded.add(plugin);app.plugins.plugins[id]=plugin;app.plugins.enabledPlugins.add(id);await plugin.onload();return plugin;},
-    async flush(home){home.calendar.check();await home.calendar.refresh();},dates:home=>home.services.events.list('default',{includeArchived:true})};
+    async flush(home){home.calendar.check();await home.calendar.refresh();},dates:home=>home.services.events.list({includeArchived:true})};
 }
 
 for(const first of ['home-widgets','my-calendar'])test(`built plugins connect in ${first} first order and deletion never writes Home Widgets business data`,async t=>{
@@ -51,7 +51,7 @@ for(const first of ['home-widgets','my-calendar'])test(`built plugins connect in
 test('built plugin unload/reload releases capability and widget registration, retains display state and reconnects the new source',async t=>{
   const f=await fixture(t),calendar=await f.start('my-calendar');let home=await f.start('home-widgets');await f.flush(home);
   await calendar.saveEvent(linked,null);await f.flush(home);
-  const derived=(await f.dates(home))[1];await home.services.events.archive('default',derived);
+  const derived=(await f.dates(home))[1];await home.services.events.archive(derived);
   f.stop('home-widgets');assert.equal(calendar.isCountdownAvailable(),false);
   home=await f.start('home-widgets');await f.flush(home);assert.equal(calendar.isCountdownAvailable(),true);assert.equal((await f.dates(home))[1].archived,true);
   const source=calendar.countdownSource;f.stop('my-calendar');
@@ -59,23 +59,16 @@ test('built plugin unload/reload releases capability and widget registration, re
   assert.equal((await f.dates(home))[1].id,derived.id);assert.equal(await home.services.events.canClearFeatured(derived.id),false);await assert.rejects(source.getSnapshot(),/未连接/);
   const next=await f.start('my-calendar');await f.flush(home);
   assert.notEqual(next.countdownSource,source);assert.equal(next.isCountdownAvailable(),true);assert(home.registry.get('my-calendar'));assert.equal((await f.dates(home))[1].archived,true);
-  const old=clone(next.events[0]);await next.saveEvent({...old,title:'重新连接后的日程',countdown:{collection:'work'}},old);await f.flush(home);
-  assert.equal((await f.dates(home)).length,1);const moved=await home.services.events.list('work',{includeArchived:true});assert.equal(moved[0].id,derived.id);assert.equal(moved[0].archived,true);
+  const old=clone(next.events[0]);await next.saveEvent({...old,title:'重新连接后的日程',countdown:true},old);await f.flush(home);
+  assert.equal((await f.dates(home)).length,2);const updated=(await f.dates(home))[1];assert.equal(updated.id,derived.id);assert.equal(updated.archived,true);
   assert.equal(JSON.stringify(f.disk['home-widgets']).includes('重新连接后的日程'),false);
 });
 
-test('built plugins atomically convert known copied records, keep display IDs and retain copies after a failed save',async t=>{
-  const old={id:'event-copied-display',calendarEventId:linked.id,title:'旧复制标题',date:'2026-11-01',archived:true};
-  const f=await fixture(t,{'my-calendar':{events:[linked]},'home-widgets':{countdowns:{version:1,collections:{default:{events:[personal,old]}}}}});
-  const calendar=await f.start('my-calendar');f.fail.add('home-widgets');const home=await f.start('home-widgets');await f.flush(home);
-  assert.equal((await home.services.events.sourceStatus()).state,'error');assert.equal(f.disk['home-widgets'].countdowns.collections.default.events.length,2);
-  f.fail.delete('home-widgets');await f.flush(home);const dates=await f.dates(home);
-  assert.equal(dates[1].id,old.id);assert.equal(dates[1].archived,true);assert.equal(dates[1].title,linked.title);
-  assert.deepEqual(f.disk['home-widgets'].countdowns.collections.default.events,[personal]);assert.equal(JSON.stringify(f.disk['home-widgets']).includes('旧复制标题'),false);
-  const writes=f.writes['home-widgets'];await f.flush(home);assert.equal(f.writes['home-widgets'],writes);
-  const state=clone(f.disk['home-widgets'].countdowns.calendarDisplay);f.fail.add('home-widgets');
-  await calendar.deleteEvent(clone(calendar.events[0]));await f.flush(home);
-  assert.equal((await f.dates(home)).length,1);assert.deepEqual(f.disk['home-widgets'].countdowns.calendarDisplay,state);
-  assert.equal((await home.services.events.sourceStatus()).state,'error');
-  f.fail.delete('home-widgets');await f.flush(home);assert.equal(f.disk['home-widgets'].countdowns.calendarDisplay,undefined);
+test('built plugins preserve display identity and remove deleted dates even when metadata cleanup fails',async t=>{
+ const state={version:1,states:{'event-my-calendar-meeting':{id:'event-preserved',archived:true}}};
+ const f=await fixture(t,{'my-calendar':{events:[linked]},'home-widgets':{countdowns:{version:2,events:[personal],calendarDisplay:state}}});
+ const calendar=await f.start('my-calendar'),home=await f.start('home-widgets');await f.flush(home);const dates=await f.dates(home);
+ assert.equal(dates[1].id,'event-preserved');assert.equal(dates[1].archived,true);assert.deepEqual(f.disk['home-widgets'].countdowns.events,[personal]);assert.equal(JSON.stringify(f.disk['home-widgets']).includes(linked.title),false);
+ f.fail.add('home-widgets');await calendar.deleteEvent(clone(calendar.events[0]));await f.flush(home);assert.equal((await f.dates(home)).length,1);assert.deepEqual(f.disk['home-widgets'].countdowns.calendarDisplay,state);assert.equal((await home.services.events.sourceStatus()).state,'error');
+ f.fail.delete('home-widgets');await f.flush(home);assert.equal(f.disk['home-widgets'].countdowns.calendarDisplay,undefined);
 });

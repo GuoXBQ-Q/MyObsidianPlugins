@@ -17,9 +17,7 @@ function createIntegrations(app,{Component,MarkdownRenderer,Scope}) {
       if(root.contains(doc.activeElement))activate();
       life.own(()=>{deactivate();for(const key of keys)scope.unregister(key);});
     },
-    status:()=>({dataview:!!plugin('dataview')?.api,tasks:!!plugin('obsidian-tasks-plugin'),quickadd:!!plugin('quickadd')?.api}),
-    async renderDataview(query,el,life,source){const api=requirePlugin('dataview','Dataview').api;if(typeof api?.execute!=='function')throw new Error('Dataview API 不可用，请更新插件');await api.execute(query,el,own(life),source);},
-    async renderTasks(query,el,life,source){requirePlugin('obsidian-tasks-plugin','Tasks');await markdown('```tasks\n'+query+'\n```',el,life,source);},
+    status:()=>({tasks:!!plugin('obsidian-tasks-plugin'),quickadd:!!plugin('quickadd')?.api}),
     renderMarkdown:markdown,
     taskTransform(){const api=plugin('obsidian-tasks-plugin')?.apiV1;return typeof api?.executeToggleTaskDoneCommand==='function'?(line,path)=>api.executeToggleTaskDoneCommand(line,path):null;},
     async quickAdd(choice,variables){const api=requirePlugin('quickadd','QuickAdd').api;if(typeof api?.executeChoice!=='function')throw new Error('QuickAdd API 不可用');await api.executeChoice(choice,variables);},

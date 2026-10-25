@@ -18,11 +18,12 @@ async function start(container) {
     async open(path){const text=await io.read(path),doc=container.ownerDocument,dialog=element(doc,'dialog',{class:'hw-preview-note'});dialog.append(element(doc,'h2',{},path),button(doc,'关闭',()=>dialog.close()),element(doc,'pre',{},text));doc.body.append(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();}
   };
   function unavailable(name){throw new Error(name+' 需要在 Obsidian 中启用对应插件；浏览器预览不模拟插件结果');}
-  const integrations={status:()=>({dataview:false,tasks:false,quickadd:false}),taskTransform:()=>null,renderDataview:()=>unavailable('Dataview 查询'),renderTasks:()=>unavailable('Tasks 查询'),quickAdd:()=>unavailable('QuickAdd'),command:()=>unavailable('Obsidian 命令'),
+  const integrations={status:()=>({tasks:false,quickadd:false}),taskTransform:()=>null,quickAdd:()=>unavailable('QuickAdd'),command:()=>unavailable('Obsidian 命令'),
     async renderMarkdown(text,el){el.append(element(el.ownerDocument,'pre',{class:'hw-preview-markdown'},text));el.append(element(el.ownerDocument,'small',{},'浏览器显示 Markdown 源文；Obsidian 内使用原生 Markdown 渲染。'));}
   };
   const registry=new WidgetRegistry();registerBuiltins(registry);const layoutPath=new URLSearchParams(window.location.search).get('layout')||undefined;
-  const store=createLayoutStore(io,bus,layoutPath);await store.initialize();
+  if(layoutPath&&layoutPath!=='Home/widgets.json')throw new Error('只支持唯一首页布局：Home/widgets.json');
+  const store=createLayoutStore(io,bus,registry);await store.initialize();
   let pluginVersion;
   const data=createPluginDataStore({
     load:async()=>{const result=await request('plugin-data-read');pluginVersion=result.version;return result.data;},

@@ -43,6 +43,7 @@ export interface HomeWidgetContext {
 }
 
 export interface HomeWidgetDefinition {
+	supportsMultipleInstances?: boolean;
 	type: string;
 	label: string;
 	icon?: string;
@@ -64,6 +65,7 @@ function el(doc: Document, tag: string, cls?: string, text?: string): HTMLElemen
 export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefinition {
 	return {
 		type: 'my-calendar',
+		supportsMultipleInstances: false,
 		label: 'MyCalendar 日历',
 		icon: '📅',
 		span: 12,

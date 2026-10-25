@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {chromium}=require(process.env.HOME_WIDGETS_PLAYWRIGHT||'playwright');
 const root=path.resolve(__dirname,'..'),vault=path.dirname(root),output=path.join(root,'preview','styling');fs.mkdirSync(output,{recursive:true});
 const esbuild=require(path.join(vault,'MyCalendar/node_modules/esbuild'));
-function asset(name){const data=fs.readFileSync(path.join(process.env.APPDATA,'obsidian/obsidian-1.14.4.asar')),header=JSON.parse(data.subarray(16,16+data.readUInt32LE(12))),entry=header.files[name],start=8+data.readUInt32LE(4)+Number(entry.offset);return data.subarray(start,start+entry.size).toString('utf8');}
+function asset(name){const data=fs.readFileSync((process.env.OBSIDIAN_ASAR||path.join(process.env.APPDATA,'obsidian',fs.readdirSync(path.join(process.env.APPDATA,'obsidian')).filter(n=>/^obsidian-.*\.asar$/.test(n)).sort().pop()))),header=JSON.parse(data.subarray(16,16+data.readUInt32LE(12))),entry=header.files[name],start=8+data.readUInt32LE(4)+Number(entry.offset);return data.subarray(start,start+entry.size).toString('utf8');}
 async function main(){
  const calendar=await esbuild.build({entryPoints:[path.join(vault,'MyCalendar/src/widget.ts')],bundle:true,write:false,format:'iife',globalName:'MyCalendarWidget',platform:'browser',target:'es2020',external:['obsidian']});
  const browser=await chromium.launch({headless:true,...(process.env.HOME_WIDGETS_BROWSER?{executablePath:process.env.HOME_WIDGETS_BROWSER}:{})});
@@ -25,7 +25,7 @@ async function main(){
   await page.evaluate(async()=>{
     const tasks=(id,title,area)=>({id,type:'tasks',title,span:6,height:260,tint:'plain',background:'',settings:{source:'Home/tasks.md',area,showCompleted:true,limit:20}});
     const calendar=(id,span)=>({id,type:'my-calendar',title:'Calendar',span,tint:'plain',background:'',settings:{showLunar:true,showFestivals:true,showHolidays:true}});
-    window.files=new Map([['Home/widgets.json',JSON.stringify({version:2,theme:'native',widgets:[tasks('tasks-work','工作待办','work'),tasks('tasks-life','日常琐事','life'),calendar('calendar-primary',12),calendar('calendar-secondary',6),{id:'unframed',type:'unframed-example',title:'无边框组件',span:6,settings:{}}]})],['Home/tasks.md','- [ ] 工作事项 #area/work ^work\n- [ ] 生活事项 #area/life ^life\n']]);
+    window.files=new Map([['Home/widgets.json',JSON.stringify({version:3,theme:'native',widgets:[tasks('tasks-work','工作待办','work'),tasks('tasks-life','日常琐事','life'),calendar('calendar-primary',12),{id:'unframed',type:'unframed-example',title:'无边框组件',span:6,settings:{}}]})],['Home/tasks.md','- [ ] 工作事项 #area/work ^work\n- [ ] 生活事项 #area/life ^life\n']]);
     const app={plugins:{plugins:{}},vault:{on(){},getName:()=> 'styling-test',adapter:{read:async p=>files.get(p),exists:async p=>files.has(p)},getAbstractFileByPath:path=>({path}),process:async(file,fn)=>{files.set(file.path,fn(files.get(file.path)));}},workspace:{openLinkText(){}}};
     window.plugin=new module.exports(app);await plugin.onload();
     const calendarPlugin={app,events:[],settings:{weekStart:'monday'},onRefresh:()=>()=>{}};
@@ -48,10 +48,8 @@ async function main(){
   await page.screenshot({path:path.join(output,'instance-style.png'),fullPage:true});
   await work.getByRole('button',{name:'设置工作待办',exact:true}).click();assert.equal(await classes.inputValue(),'work-focus compact');await classes.fill('');await dialog.getByRole('button',{name:'保存',exact:true}).click();
   await page.waitForFunction(()=>!document.querySelector('[data-widget-id="tasks-work"]').classList.contains('work-focus'));assert.equal(await work.evaluate(el=>el.classList.contains('hw-fixed')),true);assert.deepEqual(await frame(work),await frame(life));
-  await second.getByRole('button',{name:'设置Calendar',exact:true}).click();await classes.fill('soft-card');await dialog.getByRole('button',{name:'保存',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[data-widget-id="calendar-secondary"]').classList.contains('soft-card'));assert.equal(await first.evaluate(el=>el.classList.contains('soft-card')),false);assert.notEqual((await frame(first)).borderRadius,(await frame(second)).borderRadius);
   await page.getByRole('button',{name:'✓ 完成编辑',exact:true}).click();
-  const firstMonth=await first.locator('.mcw-title').textContent(),secondMonth=await second.locator('.mcw-title').textContent();await second.getByRole('button',{name:'›',exact:true}).click();assert.equal(await first.locator('.mcw-title').textContent(),firstMonth);assert.notEqual(await second.locator('.mcw-title').textContent(),secondMonth);
+  const firstMonth=await first.locator('.mcw-title').textContent();await first.getByRole('button',{name:'›',exact:true}).click();assert.notEqual(await first.locator('.mcw-title').textContent(),firstMonth);
   await page.screenshot({path:path.join(output,'calendar-light.png'),fullPage:true});
   await page.evaluate(()=>{document.body.className='theme-dark';});assert.deepEqual(await frame(first),await frame(life));await page.screenshot({path:path.join(output,'calendar-dark.png'),fullPage:true});
   await page.setViewportSize({width:390,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,'calendar-narrow.png'),fullPage:true});

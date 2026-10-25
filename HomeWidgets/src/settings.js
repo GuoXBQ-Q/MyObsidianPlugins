@@ -24,7 +24,7 @@ class HomeSettings extends PluginSettingTab {
   displayInner(){
     this.disposeView();
     const {containerEl}=this;containerEl.empty();
-    const view=this.view={active:true},store=this.store=createLayoutStore(this.plugin.io,this.plugin.bus);
+    const view=this.view={active:true},store=this.store=createLayoutStore(this.plugin.io,this.plugin.bus,this.plugin.registry);
     const root=containerEl.createDiv('hw-settings');
     const heading=root.createDiv('hw-set-heading');
     heading.createEl('h2',{text:'Home Widgets'});
@@ -93,7 +93,7 @@ class HomeSettings extends PluginSettingTab {
     const integrations=group(general,'可选集成','为内置组件提供查询、任务和快捷采集能力。');
     const renderIntegrations=()=>{
       integrations.empty();const status=this.plugin.integrations.status();
-      for(const [id,name,description] of [['dataview','Dataview','为 Dataview 查询组件提供笔记查询。'],['tasks','Tasks','为 Tasks 查询组件与周期任务提供支持。'],['quickadd','QuickAdd','为速记和命令组件提供快捷流程。']]){
+      for(const [id,name,description] of [['tasks','Tasks','为分类待办的重复任务与状态转换提供支持。'],['quickadd','QuickAdd','为速记和命令组件提供快捷流程。']]){
         const row=integrations.createDiv('hw-set-integration');
         const info=row.createDiv('hw-set-info');info.createEl('div',{cls:'hw-set-name',text:name});info.createEl('div',{cls:'hw-set-desc',text:description});
         row.createEl('span',{cls:'hw-set-status'+(status[id]?' is-connected':''),text:status[id]?'已连接':'未启用'});
@@ -134,11 +134,10 @@ class HomeSettings extends PluginSettingTab {
       info.createEl('div',{cls:'hw-set-desc',text:(source?.pluginName?source.pluginName+' · ':'')+items.length+' 个实例 · '+items.filter(item=>!item.hidden).length+' 个显示中'});
       summary.createEl('span',{cls:'hw-set-status'+(!def.unavailable?' is-connected':''),text:def.unavailable?'未连接':external?'已连接':'已就绪'});
       if(def.unavailable)panel.createEl('p',{cls:'hw-set-warning',text:'该组件的插件尚未连接。已有配置已保留；连接后可继续编辑组件专属设置。'});
-      const dependency={dataview:['dataview','Dataview'],'tasks-query':['tasks','Tasks']}[def.type];
-      if(dependency&&!this.plugin.integrations.status()[dependency[0]])panel.createEl('p',{cls:'hw-set-warning',text:'此组件由 Home Widgets 内置，使用时需要启用 '+dependency[1]+' 插件。'});
       if(!def.unavailable){
-        const add=panel.createEl('button',{cls:'hw-set-add',text:'＋ 新增实例'});add.type='button';add.setAttribute('aria-label','新增实例 '+def.label);
-        add.addEventListener('click',()=>{if(view.active)showNewWidget(this.getForms(),this.plugin.registry,store,def.type);});
+        const existing=def.supportsMultipleInstances!==true&&items[0];
+        const add=panel.createEl('button',{cls:'hw-set-add',text:existing?(existing.hidden?'已添加 · 恢复显示':'已添加 · 定位组件'):'＋ 新增实例'});add.type='button';add.setAttribute('aria-label',(existing?'已添加 ':'新增实例 ')+def.label);
+        add.addEventListener('click',()=>{if(view.active)this.run(showNewWidget(this.getForms(),this.plugin.registry,store,def.type,{locate:id=>this.plugin.openWidget(id),isActive:()=>view.active&&this.store===store}));});
       }
       const cards=group(panel,'组件实例','点击卡片编辑设置；开关控制显示，垃圾桶删除实例。删除待办组件时可选择保留任务转为未分类，或同时删除该分类任务。');cards.classList.toggle('hw-set-cards',true);
       if(!items.length)cards.createEl('p',{cls:'hw-set-empty',text:def.unavailable?'此类型没有已保存的实例。':'还没有此类型的实例。点击「＋ 新增实例」从默认配置创建。'});
@@ -165,7 +164,7 @@ class HomeSettings extends PluginSettingTab {
       }catch(e){if(view.active){loadError=e.message;error.textContent='读取布局失败：'+e.message;if(isComponentTab())renderComponents();}}
       finally{loading=false;if(again&&view.active){again=false;return refresh();}}
     };
-    this.unsub=[store.subscribe(refresh),this.plugin.bus.on('file:'+store.path,refresh),this.plugin.bus.on('registry',()=>{if(view.active&&isComponentTab())renderComponents();}),this.plugin.bus.on('integrations',()=>{if(view.active){renderIntegrations();if(isComponentTab())renderComponents();}})];
+    this.unsub=[store.subscribe(refresh),this.plugin.bus.on('file:'+store.path,refresh),this.plugin.bus.on('registry',refresh),this.plugin.bus.on('integrations',()=>{if(view.active){renderIntegrations();if(isComponentTab())renderComponents();}})];
     selectTab('general');refresh();
   }
   instanceCard(def,item,store){

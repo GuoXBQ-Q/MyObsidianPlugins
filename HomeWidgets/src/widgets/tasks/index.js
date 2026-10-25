@@ -7,7 +7,7 @@ const {createTaskDrag}=require('./drag');
 const keys=(settings,name)=>Array.isArray(settings[name])?settings[name].filter(key=>typeof key==='string'):[];
 const taskKey=task=>JSON.stringify([task.source,task.id]);
 const baseRaw=raw=>raw.replace(/ \^[\w-]+\s*$/,'').trimEnd();
-module.exports={type:'tasks',label:'分类待办',icon:doc=>icon(doc,'tasks'),span:4,deferRender:true,defaults:{source:'Home/待办.md',area:'work',showCompleted:true,limit:20},
+module.exports={type:'tasks',label:'分类待办',supportsMultipleInstances:true,icon:doc=>icon(doc,'tasks'),span:4,deferRender:true,defaults:{source:'Home/待办.md',area:'work',showCompleted:true,limit:20},
   fields:[{key:'source',label:'待办笔记路径',required:true},{key:'area',label:'分类标签后缀，例如 work、life、study',required:true},{key:'showCompleted',label:'显示已完成任务',type:'checkbox'},{key:'limit',label:'最多显示主待办组数',type:'number',min:1,max:200}],
   watch:c=>['file:'+c.source,'integrations'],
   async mount(ctx){

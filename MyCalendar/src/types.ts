@@ -18,8 +18,8 @@ export interface CalendarEvent {
 	/** 备注 */
 	note?: string;
 	createdAt: number;
-	/** 开启时单向同步到 Home Widgets 的日期集合；省略则不参与同步。 */
-	countdown?: { collection: string };
+	/** 开启时单向同步到 Home Widgets 的唯一日期列表；省略则不参与同步。 */
+	countdown?: true;
 }
 
 export type ViewMode = 'day' | 'week' | 'month' | 'agenda';

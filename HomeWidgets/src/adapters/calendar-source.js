@@ -34,18 +34,16 @@ function createCalendarAdapter({resolve,display,bus,registerWidget=()=>()=>{},se
           const snapshot=readCalendarSnapshot(await api.getSnapshot());
           if(!valid())continue;
           if(snapshot.revision<lastRevision)throw new Error('日程来源返回过期快照');
-          const {legacy}=await display.read();let displayError;
+          let displayError;
           try{await display.reconcile(snapshot.events,valid);}
           catch(error){
-            // Conversion must commit before copied IDs/archive state can be used.
-            // Later metadata cleanup failures must not keep deleted source dates visible.
-            if(legacy.length)throw error;displayError=error;
+            // Failed metadata cleanup must not keep deleted source dates visible.
+            displayError=error;
           }
           if(!valid())continue;
           const before=records;records=snapshot.events;lastRevision=snapshot.revision;
           status(displayError?'error':'connected',displayError?'日程展示状态保存失败：'+displayError.message:'');
-          const changed=new Set([...before,...records].map(event=>event.collection));
-          for(const collection of changed)if(JSON.stringify(before.filter(event=>event.collection===collection))!==JSON.stringify(records.filter(event=>event.collection===collection)))bus.emit('countdown:'+collection);
+          if(JSON.stringify(before)!==JSON.stringify(records))bus.emit('countdown');
         }catch(error){if(valid())status('error','日程来源读取或展示状态保存失败：'+error.message);}
       }
     }).finally(()=>{running=null;if(requested&&alive&&source)void refresh();});
@@ -54,20 +52,20 @@ function createCalendarAdapter({resolve,display,bus,registerWidget=()=>()=>{},se
   return {
     start(){if(timer!==undefined)return;check();timer=setTimer(check,1000);},
     check,refresh,
-    async list(collection,{includeArchived=false}={}){
+    async list({includeArchived=false}={}){
       const {states}=await display.read();
-      return records.filter(event=>event.collection===collection).map(event=>{
+      return records.map(event=>{
         const key=calendarId(event.id),saved=states[key]||{};
         return {id:saved.id||key,title:event.title,date:event.date,start:'',area:'',calendarEventId:event.id,...(saved.archived?{archived:true}:{})};
       }).filter(event=>includeArchived||!event.archived);
     },
-    async sourceStatus(){const {states,legacy}=await display.read();return everConnected||legacy.length||Object.keys(states).length?{state,message}:null;},
-    async isSourceId(id){const {states,legacy}=await display.read();return id.startsWith('event-my-calendar-')||Object.values(states).some(value=>value.id===id)||legacy.some(event=>event.id===id);},
-    async archive(collection,event,archived){
-      const matches=await this.list(collection,{includeArchived:true}),found=matches.find(value=>value.id===event.id);
+    async sourceStatus(){const {states}=await display.read();return state==='error'||everConnected||Object.keys(states).length?{state,message}:null;},
+    async isSourceId(id){const {states}=await display.read();return id.startsWith('event-my-calendar-')||Object.values(states).some(value=>value.id===id);},
+    async archive(event,archived){
+      const matches=await this.list({includeArchived:true}),found=matches.find(value=>value.id===event.id);
       if(!found||JSON.stringify(found)!==JSON.stringify(event))throw new Error('日程已变化，请刷新后重新确认');
       const record=records.find(value=>value.id===event.calendarEventId),key=calendarId(event.calendarEventId);
-      await display.archive(key,archived,()=>alive&&records.some(value=>JSON.stringify(value)===JSON.stringify(record)),event.archived);bus.emit('countdown:'+collection);
+      await display.archive(key,archived,()=>alive&&records.some(value=>JSON.stringify(value)===JSON.stringify(record)),event.archived);bus.emit('countdown');
     },
     dispose(){if(!alive)return;alive=false;clearTimer(timer);detach();state='disconnected';message='日程来源未连接';notify();}
   };

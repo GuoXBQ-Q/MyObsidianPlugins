@@ -1,7 +1,6 @@
 const {element,button,empty}=require('../../core/dom');
 const {icon}=require('../../core/icons');
 const {daysUntil,localDay}=require('../../services/date');
-const {collectionKey}=require('../../services/persistent-events');
 const fields=[{key:'title',label:'日期名称',required:true},{key:'date',label:'目标日期',type:'date',required:true},{key:'start',label:'开始日期（可选）',type:'date'},{key:'area',label:'分类'}];
 const weekdays=['周日','周一','周二','周三','周四','周五','周六'];
 function dateDetails(date){
@@ -12,11 +11,11 @@ function listIcon(event){
   if(/新年|新的一年|元旦|纪念|生日|庆祝/.test(event.title))return 'sparkles';
   return event.area==='生活'?'coffee':'calendar';
 }
-module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass'),span:5,defaults:{source:'default',featured:'',upcoming:0},
-  fields:[{key:'source',label:'日期集合',required:true,help:'相同集合共用日期。独立日期保存在本插件，关联日程由 MyCalendar 提供；无需填写笔记路径。'},{key:'featured',label:'置顶日期',type:'select',dependsOn:['source'],options:async(value,services)=>[['','自动选择（最近未到期的日子）'],...(await services.events.list(value.source)).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.id,e.title+' · '+e.date])],help:'仅影响当前组件；也可直接点击日期旁的图钉设置或取消置顶。全部日期都已结束时，自动显示最近结束的日子。'},{key:'upcoming',label:'折叠时显示数量（0 = 全部）',type:'number',min:0,max:200,help:'设置数量后仍可点击「查看全部」；日期较多时在组件内滚动查看。'}],
-  watch:c=>['countdown:'+collectionKey(c.source),'calendar-source'],
+module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass'),span:5,defaults:{featured:'',upcoming:0},
+  fields:[{key:'featured',label:'置顶日期',type:'select',options:async(value,services)=>[['','自动选择（最近未到期的日子）'],...(await services.events.list()).sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.id,e.title+' · '+e.date])],help:'仅影响当前组件；也可直接点击日期旁的图钉设置或取消置顶。全部日期都已结束时，自动显示最近结束的日子。'},{key:'upcoming',label:'折叠时显示数量（0 = 全部）',type:'number',min:0,max:200,help:'设置数量后仍可点击「查看全部」；日期较多时在组件内滚动查看。'}],
+  watch:()=>['countdown','calendar-source'],
   async mount(ctx){
-    const all=await ctx.services.events.list(ctx.config.source,{includeArchived:true});if(ctx.signal.aborted)return;
+    const all=await ctx.services.events.list({includeArchived:true});if(ctx.signal.aborted)return;
     const sourceStatus=await ctx.services.events.sourceStatus();if(ctx.signal.aborted)return;
     if(sourceStatus&&sourceStatus.state!=='connected')ctx.el.append(element(ctx.doc,'p',{class:'hw-countdown-source-status',role:'status'},sourceStatus.message));
     const events=all.filter(e=>!e.archived),archived=all.filter(e=>e.archived);
@@ -25,7 +24,7 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
     }
     const doc=ctx.doc,edit=e=>{
       if(e?.calendarEventId){ctx.notify('此倒计时来自 MyCalendar，请在日程中修改；取消同步或删除日程也会移除倒计时。');return;}
-      return ctx.forms.show(e?'编辑关键日期':'添加关键日期',fields,e||{area:'生活'},v=>ctx.services.events.save(ctx.config.source,{...v,id:e?.id}));
+      return ctx.forms.show(e?'编辑关键日期':'添加关键日期',fields,e||{area:'生活'},v=>ctx.services.events.save({...v,id:e?.id}));
     };
     const pinButton=event=>{
       const selected=event.id===ctx.config.featured;
@@ -33,7 +32,7 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
         if(pin.disabled||ctx.signal.aborted)return;pin.disabled=true;
         try{
           if(!selected){
-            const latest=await ctx.services.events.list(ctx.config.source);if(ctx.signal.aborted)return;
+            const latest=await ctx.services.events.list();if(ctx.signal.aborted)return;
             if(!latest.some(e=>e.id===event.id))throw new Error('日期已删除，请刷新后重新选择');
           }
           await ctx.updateConfig({featured:selected?'':event.id});
@@ -44,18 +43,18 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
     const deleteButton=event=>{
       if(event.calendarEventId){
         const archive=button(doc,'',()=>ctx.forms.confirm('归档日历同步日期','归档后隐藏倒计时，仍会接收日程更新，可从「已归档」恢复。要停止联动，请在 MyCalendar 日程中取消同步。',async()=>{
-          await ctx.services.events.archive(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
+          await ctx.services.events.archive(event);if(!ctx.signal.aborted)await ctx.refresh();
         },'归档'),{class:'hw-button hw-icon-button hw-countdown-archive-date','aria-label':'归档日期 '+event.title});
         archive.append(icon(doc,'archive'));return archive;
       }
       const remove=button(doc,'',()=>ctx.forms.show('删除关键日期',[],{},async()=>{
-        await ctx.services.events.remove(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
+        await ctx.services.events.remove(event);if(!ctx.signal.aborted)await ctx.refresh();
       },'删除日期',{
         danger:true,successMessage:'已删除',
         description:{message:'可以归档保留这个日子，也可以永久删除。',content:event.title,
-          detail:event.date+' · 归档后不再显示，可从「已归档」恢复；删除会永久移除记录。其他使用同一日期集合的组件也会同步更新。'},
+          detail:event.date+' · 归档后不再显示，可从「已归档」恢复；删除会永久移除记录。其他打开的首页也会同步更新。'},
         secondaryAction:{label:'归档',successMessage:'已归档',run:async()=>{
-          await ctx.services.events.archive(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
+          await ctx.services.events.archive(event);if(!ctx.signal.aborted)await ctx.refresh();
         }}
       }),{
         class:'hw-button hw-icon-button hw-countdown-delete','aria-label':'删除日期 '+event.title
@@ -69,8 +68,8 @@ module.exports={type:'countdown',label:'倒计时',icon:doc=>icon(doc,'hourglass
         {key:'id',label:'选择要恢复的日子',type:'select',options:[...archived].sort((a,b)=>a.date.localeCompare(b.date)).map(e=>[e.id,e.title+' · '+e.date])}
       ],{id:archived[0].id},async value=>{
         const event=archived.find(e=>e.id===value.id);if(!event)throw new Error('请选择要恢复的日子');
-        await ctx.services.events.restore(ctx.config.source,event);if(!ctx.signal.aborted)await ctx.refresh();
-      },'恢复显示',{description:'归档的日子保留在日期集合中，不参与倒计时显示。恢复后重新显示，原有置顶不会自动恢复。',successMessage:'已恢复显示'}),{class:'hw-button hw-icon-button hw-countdown-archive','aria-label':'查看已归档的日子（'+archived.length+'）'});
+        await ctx.services.events.restore(event);if(!ctx.signal.aborted)await ctx.refresh();
+      },'恢复显示',{description:'归档的日子保留在日期列表中，不参与倒计时显示。恢复后重新显示，原有置顶不会自动恢复。',successMessage:'已恢复显示'}),{class:'hw-button hw-icon-button hw-countdown-archive','aria-label':'查看已归档的日子（'+archived.length+'）'});
       history.append(icon(doc,'archive'),element(doc,'span',{class:'hw-countdown-archive-count','aria-hidden':'true'},archived.length));
       ctx.actions.append(history);
     }
