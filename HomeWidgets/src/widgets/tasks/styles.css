@@ -10,7 +10,7 @@
 .hw-home [data-widget-type="tasks"] .hw-widget-header h2>span{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .hw-home [data-widget-type="tasks"] .hw-widget-header h2>span>svg{display:block;width:19px;height:19px}
 .hw-home [data-widget-type="tasks"] .hw-widget-actions{flex-wrap:wrap;justify-content:flex-end}
-.hw-home [data-widget-type="tasks"] .hw-task{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--hw-line) 45%,transparent);font-size:12px}
+.hw-home [data-widget-type="tasks"] .hw-task{display:flex;align-items:flex-start;gap:10px;padding:10px 0;font-size:12px}
 .hw-home [data-widget-type="tasks"] .hw-task-main{display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;cursor:pointer}
 .hw-home [data-widget-type="tasks"] .hw-task-main>span{min-width:0;overflow-wrap:anywhere}
 .hw-home [data-widget-type="tasks"] .hw-task input{appearance:auto;accent-color:var(--hw-accent);width:14px;height:14px;min-width:14px;margin:3px 0 0;box-shadow:none}
@@ -38,6 +38,7 @@
 .hw-home [data-widget-type="tasks"] .hw-task-completed[hidden]{display:none}
 .hw-home [data-widget-type="tasks"] .hw-task-group{position:relative;min-width:0;border-radius:9px;transition:background .15s}
 .hw-home [data-widget-type="tasks"] .hw-task-group>.hw-task{padding:10px 4px;gap:6px}
+.hw-home [data-widget-type="tasks"] .hw-task-group+.hw-task-group>.hw-task,.hw-home [data-widget-type="tasks"] .hw-task-child+.hw-task-child{border-top:1px solid color-mix(in srgb,var(--hw-line) 45%,transparent)}
 .hw-home [data-widget-type="tasks"] .hw-task-group:has(.hw-task-child){background:color-mix(in srgb,var(--hw-accent) 3%,transparent)}
 .hw-home [data-widget-type="tasks"] .hw-task-children{margin-left:26px;border-left:1px solid var(--hw-line);padding-left:10px}
 .hw-home [data-widget-type="tasks"] .hw-task-child{padding:9px 4px;gap:6px}
