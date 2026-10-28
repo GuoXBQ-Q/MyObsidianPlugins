@@ -28,6 +28,13 @@ void createMyCalendarWidget(plugin as any).mount({
 	platform: { vaultId: 'preview', preview: false }, lifetime: { own: cleanup => { cleanups.push(cleanup); return cleanup; } },
 	local: { cursor: { y: 2026, m: 11 } }, notify: message => { document.getElementById('notice')!.textContent = message; },
 });
+
+// Isolated browser regression fixtures; never read or write vault data.
+(window as any).calendarRangePreview = {
+	setEvents(events: CalendarEvent[]) { plugin.events = events; void plugin.saveAll(); },
+	show(date: string, mode: 'month' | 'week' | 'day') { view.jumpTo(new Date(date + 'T12:00:00'), mode); },
+	setWeekStart(value: 'monday' | 'sunday') { plugin.settings.weekStart = value; void plugin.saveAll(); },
+};
 document.getElementById('theme')!.addEventListener('click', () => { document.body.classList.toggle('theme-dark'); document.body.classList.toggle('theme-light'); });
 document.getElementById('narrow')!.addEventListener('click', () => document.body.classList.toggle('narrow'));
 for (const size of ['short', 'tall', 'auto']) document.getElementById(`height-${size}`)!.addEventListener('click', () => {

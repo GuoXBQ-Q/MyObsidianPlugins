@@ -4,7 +4,7 @@ import { CalendarEvent, ViewMode } from './types';
 import { EventModal } from './event-modal';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
-import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
+import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
 import {
 	addDays,
 	addMonths,
@@ -259,7 +259,6 @@ export class CalendarView extends ItemView {
 		const gridStart = addDays(first, -offset);
 		const map = this.eventsByDate(gridStart, 42);
 		const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(this.plugin.events, addDays(gridStart, i * 7), 7, settings.newEventsAtBottom));
-		const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
 
 		const labels = weekdayLabels(settings.weekStart);
 		const wd = container.createDiv('mc-weekdays');
@@ -310,7 +309,7 @@ export class CalendarView extends ItemView {
 			});
 
 			const chips = cell.createDiv('mc-chips');
-			chips.style.paddingTop = `${lanes[week] * 22}px`;
+			chips.style.paddingTop = `${rangeLaneCount(weeks[week], i % 7) * 22}px`;
 			const singles = evs.filter(ev => !isMultiDay(ev));
 			const maxChips = 3;
 			for (const ev of singles.slice(0, maxChips)) chips.append(this.chipEl(ev));
@@ -348,7 +347,7 @@ export class CalendarView extends ItemView {
 			const key = fmtDate(day);
 			const cellEl = cells.createDiv('mc-allday-cell');
 			cellEl.style.gridRow = '1'; cellEl.style.gridColumn = String(index + 1);
-			cellEl.style.paddingTop = `${4 + lanes * 22}px`;
+			cellEl.style.paddingTop = `${4 + rangeLaneCount(spans, index) * 22}px`;
 			cellEl.style.minHeight = `${34 + lanes * 22}px`;
 			if (key === today) cellEl.addClass('mc-today');
 			for (const ev of (map.get(key) ?? []).filter((e) => !e.startTime && !isMultiDay(e))) cellEl.append(this.chipEl(ev));

@@ -5,7 +5,7 @@ const Module = require('node:module');
 const esbuild = require('esbuild');
 const code = esbuild.buildSync({ entryPoints: [path.join(__dirname, '../src/event-range.ts')], bundle: true, write: false, platform: 'node', format: 'cjs' }).outputFiles[0].text;
 const compiled = new Module(__filename); compiled._compile(code, __filename);
-const { indexEvents, rangeSegments, eventDescription, isMultiDay, eventEndDate, compareEvents } = compiled.exports;
+const { indexEvents, rangeSegments, rangeLaneCount, eventDescription, isMultiDay, eventEndDate, compareEvents } = compiled.exports;
 const ev = (id, date, endDate) => ({ id, title: id, date, endDate, color: 'blue', createdAt: 0 });
 
 test('new events stay below existing events despite earlier times or titles, and editing preserves order', () => {
@@ -63,6 +63,23 @@ test('overlapping ranges get different lanes, non-overlapping ranges can share a
 	const spans = rangeSegments([ev('a', '2026-11-02', '2026-11-04'), ev('b', '2026-11-04', '2026-11-06'), ev('c', '2026-11-05', '2026-11-08')], new Date(2026, 10, 2));
 	assert.notEqual(spans[0].lane, spans[1].lane);
 	assert.equal(spans[0].lane, spans[2].lane);
+});
+
+test('November 4 and 11 reserve no empty rows for ranges on other dates of the same week', () => {
+	const events = [ev('conference', '2026-11-05', '2026-11-08'), ev('inscrypt', '2026-11-06', '2026-11-10'), ev('single-4', '2026-11-04'), ev('single-11', '2026-11-11')];
+	for (const bottom of [false, true]) {
+		const first = rangeSegments(events, new Date(2026, 10, 2), 7, bottom);
+		const second = rangeSegments(events, new Date(2026, 10, 9), 7, bottom);
+		assert.deepEqual(Array.from({length:7}, (_, day) => rangeLaneCount(first, day)), [0, 0, 0, 1, 2, 2, 2]);
+		assert.deepEqual(Array.from({length:7}, (_, day) => rangeLaneCount(second, day)), [1, 1, 0, 0, 0, 0, 0]);
+	}
+});
+
+test('days intersecting a lower range lane still reserve enough space to avoid overlap', () => {
+	const spans = rangeSegments([ev('older', '2026-11-02', '2026-11-03'), ev('newer', '2026-11-02', '2026-11-06')], new Date(2026, 10, 2), 7, true);
+	assert.equal(rangeLaneCount(spans, 2), 2, 'preserve the lower bar even when its upper lane is empty on this day');
+	assert.equal(rangeLaneCount(spans, 4), 2, 'end date is inclusive');
+	assert.equal(rangeLaneCount(spans, 5), 0);assert.equal(rangeLaneCount([], 0), 0);
 });
 
 test('cross-month, leap day, year-end, Sunday start and day view boundaries', () => {

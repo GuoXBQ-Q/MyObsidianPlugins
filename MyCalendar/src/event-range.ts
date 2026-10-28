@@ -55,6 +55,11 @@ export function rangeSegments(events: CalendarEvent[], start: Date, count = 7, n
 	return spans;
 }
 
+/** Reserve space only for range bars that intersect this date, preserving their shared lanes. */
+export function rangeLaneCount(spans: RangeSegment[], dayIndex: number): number {
+	return spans.reduce((count, span) => span.start <= dayIndex && span.end >= dayIndex ? Math.max(count, span.lane + 1) : count, 0);
+}
+
 /** Shared grid placement for native calendar and homepage bars. */
 export function placeRangeBar(bar: HTMLElement, span: RangeSegment, row: number, top: number, step: number): void {
 	bar.style.gridRow = String(row);

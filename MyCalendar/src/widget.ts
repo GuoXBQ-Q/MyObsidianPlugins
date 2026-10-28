@@ -14,7 +14,7 @@ import {
 	weekdayLabels,
 } from './utils';
 import { acquireCalendarWidgetStyles } from './widget-styles';
-import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeSegments } from './event-range';
+import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
 
 /**
  * 注册到 Home Widgets 宿主的组件定义。
@@ -198,7 +198,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					cell.append(top);
 
 					const chips = el(doc, 'div', 'mcw-chips');
-					chips.style.paddingTop = `${lanes[week] * 18}px`;
+					chips.style.paddingTop = `${rangeLaneCount(weeks[week], i % 7) * 18}px`;
 					const singles = evs.filter(ev => !isMultiDay(ev));
 					for (const ev of singles.slice(0, 2)) chips.append(chipEl(ev));
 					if (singles.length > 2) {
