@@ -72,6 +72,34 @@ test('a failed delete retains the source and a render failure cannot suppress co
  f.setFail(true);await assert.rejects(f.plugin.deleteEvent(initial),/disk full/);assert.equal(changes,0);assert.equal(f.disk.events.length,1);
  f.setFail(false);f.plugin.refreshViews=()=>{throw Error('render failure');};await f.plugin.deleteEvent(initial);assert.equal(changes,1);assert.equal((await f.plugin.countdownSource.getSnapshot()).events.length,0);
 });
+test('event completion toggles persist, refresh all subscribers and survive reload without changing linked dates',async t=>{
+ const initial=event('a',{countdown:true,note:'保留备注',important:true}),f=await fixture([initial]);t.after(()=>f.plugin.unload());
+ let refreshes=0,changes=0;f.plugin.onRefresh(()=>refreshes++);f.plugin.countdownSource.subscribe(()=>changes++);
+ assert.equal(!!f.plugin.events[0].completed,false);
+ await f.plugin.toggleEventCompleted('a');
+ assert.deepEqual(f.disk.events[0],{...initial,completed:true});assert.equal(f.plugin.events[0].completed,true);assert.equal(refreshes,1);assert.equal(changes,0);
+ f.plugin.events=[];await f.plugin.loadSettings();assert.equal(f.plugin.events[0].completed,true);
+ const current=clone(f.plugin.events[0]);await f.plugin.saveEvent({...current,title:'完成后编辑'},current);
+ assert.equal(f.plugin.events[0].completed,true);assert.equal(f.disk.events[0].title,'完成后编辑');
+ await f.plugin.toggleEventCompleted('a');assert.equal(f.plugin.events[0].completed,false);assert.equal(f.disk.events[0].completed,false);
+});
+
+test('completion uses the latest queued event and consecutive clicks toggle independently',async t=>{
+ const initial=event(),f=await fixture([initial]);t.after(()=>f.plugin.unload());
+ await Promise.all([f.plugin.saveEvent({...initial,title:'最新标题'},initial),f.plugin.toggleEventCompleted('a')]);
+ assert.equal(f.disk.events[0].title,'最新标题');assert.equal(f.disk.events[0].completed,true);
+ await Promise.all([f.plugin.toggleEventCompleted('a'),f.plugin.toggleEventCompleted('a')]);assert.equal(f.disk.events[0].completed,true);
+ await assert.rejects(f.plugin.saveEvent({...initial,title:'旧编辑'},initial),/已变化/);assert.equal(f.disk.events[0].completed,true);
+ await assert.rejects(f.plugin.toggleEventCompleted('missing'),/已被删除/);assert.equal(f.disk.events.length,1);
+});
+
+test('failed completion writes retain memory and disk state and a later toggle can retry',async t=>{
+ const initial=event(),f=await fixture([initial]);t.after(()=>f.plugin.unload());let refreshes=0;f.plugin.onRefresh(()=>refreshes++);
+ f.setFail(true);await assert.rejects(f.plugin.toggleEventCompleted('a'),/disk full/);
+ assert.deepEqual(clone(f.plugin.events),[initial]);assert.deepEqual(f.disk.events,[initial]);assert.equal(refreshes,0);
+ f.setFail(false);await f.plugin.toggleEventCompleted('a');assert.equal(f.plugin.events[0].completed,true);assert.equal(refreshes,1);
+});
+
 test('shared widget styles stay until the last widget in each document releases them',()=>{
  const {acquireCalendarWidgetStyles}=compile('widget-styles.ts');
  function document(){const styles=[];return {styles,createElement(){return {remove(){styles.splice(styles.indexOf(this),1);}};},head:{append(style){styles.push(style);}}};}

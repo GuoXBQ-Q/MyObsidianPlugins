@@ -15,6 +15,8 @@ export interface CalendarEvent {
 	color: string;
 	/** 重要事件：当天单元格会被高亮突出 */
 	important?: boolean;
+	/** 已完成；省略表示未完成 */
+	completed?: boolean;
 	/** 备注 */
 	note?: string;
 	createdAt: number;

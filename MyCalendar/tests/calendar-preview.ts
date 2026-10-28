@@ -4,12 +4,18 @@ import { CalendarEvent, DEFAULT_SETTINGS } from '../src/types';
 
 const event = (id: string, title: string, date: string, endDate?: string, color = 'blue'): CalendarEvent => ({ id, title, date, endDate, color, createdAt: 0, note: '预览示例，真实日程未被读取或修改' });
 const callbacks = new Set<() => void>();
+let completionError: string | null = null;
 const plugin = {
 	isCountdownAvailable: () => false,
 	app: {}, settings: { ...DEFAULT_SETTINGS },
 	events: [event('tianjin', '天津 · 会议活动', '2026-11-06', '2026-11-09'), event('prep', '会前准备', '2026-11-07', '2026-11-08', 'purple'), event('month', '跨月出差', '2026-10-30', '2026-11-03', 'teal'), { ...event('single', '项目同步', '2026-11-06'), startTime: '10:00', endTime: '11:00' }],
 	onRefresh(callback: () => void) { callbacks.add(callback); return () => callbacks.delete(callback); },
 	async saveAll() { view.rerender(); for (const callback of callbacks) callback(); },
+	async toggleEventCompleted(id: string) {
+		if (completionError) throw new Error(completionError);
+		this.events = this.events.map(event => event.id === id ? { ...event, completed: !event.completed } : event);
+		await this.saveAll();
+	},
 	async saveEvent(value: CalendarEvent, existing: CalendarEvent | null) {
 		const copy = JSON.parse(JSON.stringify(value));
 		this.events = existing ? this.events.map(event => event.id === value.id ? copy : event) : [...this.events, copy];
@@ -32,8 +38,10 @@ void createMyCalendarWidget(plugin as any).mount({
 // Isolated browser regression fixtures; never read or write vault data.
 (window as any).calendarRangePreview = {
 	setEvents(events: CalendarEvent[]) { plugin.events = events; void plugin.saveAll(); },
-	show(date: string, mode: 'month' | 'week' | 'day') { view.jumpTo(new Date(date + 'T12:00:00'), mode); },
+	show(date: string, mode: 'month' | 'week' | 'day' | 'agenda') { view.jumpTo(new Date(date + 'T12:00:00'), mode); },
 	setWeekStart(value: 'monday' | 'sunday') { plugin.settings.weekStart = value; void plugin.saveAll(); },
+	getEvents() { return JSON.parse(JSON.stringify(plugin.events)); },
+	setCompletionError(message: string | null) { completionError = message; },
 };
 document.getElementById('theme')!.addEventListener('click', () => { document.body.classList.toggle('theme-dark'); document.body.classList.toggle('theme-light'); });
 document.getElementById('narrow')!.addEventListener('click', () => document.body.classList.toggle('narrow'));

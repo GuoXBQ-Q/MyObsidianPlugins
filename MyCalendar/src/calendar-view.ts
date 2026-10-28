@@ -1,7 +1,8 @@
-import { ItemView, WorkspaceLeaf, setIcon } from 'obsidian';
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from 'obsidian';
 import type MyCalendarPlugin from './main';
 import { CalendarEvent, ViewMode } from './types';
 import { EventModal } from './event-modal';
+import { createCompletionToggle } from './event-completion';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
 import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
@@ -172,6 +173,12 @@ export class CalendarView extends ItemView {
 		new EventModal(this.app, this.plugin, ev, ev.date).open();
 	}
 
+	private completionToggle(ev: CalendarEvent, cls: string): HTMLButtonElement {
+		return createCompletionToggle(this.contentEl.ownerDocument, ev, `${cls} mc-completion-toggle`,
+			() => this.plugin.toggleEventCompleted(ev.id),
+			error => new Notice(error instanceof Error ? error.message : '日程状态保存失败，请重试'));
+	}
+
 	// ------------- 渲染 -------------
 
 	rerender(): void {
@@ -230,11 +237,12 @@ export class CalendarView extends ItemView {
 	private chipEl(ev: CalendarEvent): HTMLElement {
 		const color = colorOf(ev.color);
 		const chip = createDiv('mc-chip');
-		chip.style.background = hexToRgba(color, 0.16);
-		chip.style.setProperty('--mc-chip-color', color);
+		chip.dataset.eventId = ev.id;
+		if (ev.completed) chip.addClass('mc-completed');
+		chip.style.background = ev.completed ? 'var(--background-modifier-hover)' : hexToRgba(color, 0.16);
+		chip.style.setProperty('--mc-chip-color', ev.completed ? 'var(--text-muted)' : color);
 
-		const dot = chip.createSpan('mc-chip-dot');
-		dot.style.borderColor = color;
+		chip.append(this.completionToggle(ev, 'mc-chip-dot'));
 		if (!isMultiDay(ev)) chip.createSpan({ cls: 'mc-chip-time', text: ev.startTime ? fmtTimeShort(ev.startTime) : '全天' });
 		chip.createSpan({ cls: 'mc-chip-title', text: ev.title });
 		if (ev.important) chip.createSpan({ cls: 'mc-chip-star', text: '★' });
@@ -392,8 +400,10 @@ export class CalendarView extends ItemView {
 				const e = Math.max(toMin(ev.endTime), s + 30);
 				const color = colorOf(ev.color);
 				const block = col.createDiv('mc-time-block');
-				block.style.setProperty('--mc-chip-color', color);
-				block.style.background = hexToRgba(color, 0.16);
+				block.dataset.eventId = ev.id;
+				if (ev.completed) block.addClass('mc-completed');
+				block.style.setProperty('--mc-chip-color', ev.completed ? 'var(--text-muted)' : color);
+				block.style.background = ev.completed ? 'var(--background-modifier-hover)' : hexToRgba(color, 0.16);
 
 				let top = ((s / 60 - sh) / span) * 100;
 				let height = (Math.min(Math.max((e - s) / 60, 0.5), span) / span) * 100;
@@ -404,7 +414,9 @@ export class CalendarView extends ItemView {
 				block.style.left = `calc(${(lane * 100) / total}% + 2px)`;
 				block.style.width = `calc(${100 / total}% - 4px)`;
 
-				block.createDiv({ cls: 'mc-tb-title', text: ev.title + (ev.important ? ' ★' : '') });
+				const heading = block.createDiv('mc-tb-heading');
+				heading.append(this.completionToggle(ev, 'mc-tb-dot'));
+				heading.createDiv({ cls: 'mc-tb-title', text: ev.title + (ev.important ? ' ★' : '') });
 				block.createDiv({
 					cls: 'mc-tb-time',
 					text: `${fmtTimeShort(ev.startTime)}${ev.endTime ? ' – ' + fmtTimeShort(ev.endTime) : ''}`,
@@ -542,15 +554,16 @@ export class CalendarView extends ItemView {
 
 			const color = colorOf(ev.color);
 			const item = scroll.createDiv('mc-agenda-item');
+			item.dataset.eventId = ev.id;
+			item.style.setProperty('--mc-chip-color', ev.completed ? 'var(--text-muted)' : color);
+			if (ev.completed) item.addClass('mc-completed');
 			if (eventEndDate(ev) < today) item.addClass('mc-past');
-			const dot = item.createSpan('mc-agenda-dot');
-			dot.style.borderColor = color;
+			item.append(this.completionToggle(ev, 'mc-agenda-dot'));
 			item.createSpan({
 				cls: 'mc-agenda-time',
 				text: isMultiDay(ev) ? `${ev.date}${ev.startTime ? ' ' + ev.startTime : ''} 至 ${eventEndDate(ev)}${ev.endTime ? ' ' + ev.endTime : ''}` : ev.startTime ? `${fmtTimeShort(ev.startTime)}${ev.endTime ? ' – ' + fmtTimeShort(ev.endTime) : ''}` : '全天',
 			});
-			const title = item.createSpan({ cls: 'mc-agenda-title', text: ev.title });
-			title.style.setProperty('--mc-chip-color', color);
+			item.createSpan({ cls: 'mc-agenda-title', text: ev.title });
 			if (ev.important) item.createSpan({ cls: 'mc-chip-star', text: '★' });
 			if (ev.note) item.createSpan({ cls: 'mc-agenda-note', text: ev.note });
 			item.setAttribute('aria-label', eventDescription(ev));

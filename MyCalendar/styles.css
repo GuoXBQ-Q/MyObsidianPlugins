@@ -329,14 +329,77 @@
 	color: var(--text-normal);
 }
 
-.mc-chip-dot {
-	width: 6px;
-	height: 6px;
-	box-sizing: border-box;
+.my-calendar-view button.mc-completion-toggle {
+	appearance: none;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 14px;
+	width: 14px;
+	min-width: 14px;
+	height: 14px;
+	min-height: 0;
+	padding: 0;
+	margin: 0;
+	border: 0;
 	border-radius: 50%;
-	border: 1px solid var(--mc-chip-color, var(--interactive-accent));
 	background: transparent;
-	flex-shrink: 0;
+	box-shadow: none;
+	color: var(--mc-chip-color, var(--interactive-accent));
+	cursor: pointer;
+}
+
+.my-calendar-view .mc-completion-toggle::before {
+	content: '';
+	width: 9px;
+	height: 9px;
+	box-sizing: border-box;
+	border: 1.2px solid currentColor;
+	border-radius: 50%;
+}
+
+.my-calendar-view .mc-completion-toggle[aria-pressed='true']::before {
+	background: currentColor;
+}
+
+.my-calendar-view .mc-completion-toggle[aria-pressed='true']::after {
+	content: '';
+	position: absolute;
+	width: 3px;
+	height: 5px;
+	border: solid var(--background-primary);
+	border-width: 0 1.2px 1.2px 0;
+	transform: translateY(-1px) rotate(45deg);
+}
+
+.my-calendar-view button.mc-completion-toggle:hover {
+	background: var(--background-modifier-hover);
+}
+
+.my-calendar-view button.mc-completion-toggle:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+.my-calendar-view button.mc-completion-toggle:disabled {
+	cursor: wait;
+}
+
+.my-calendar-view .mc-completed,
+.my-calendar-view .mc-completed .mc-chip-star {
+	color: var(--text-muted);
+}
+
+.mc-completed .mc-chip-title,
+.mc-completed .mc-chip-time,
+.mc-completed .mc-tb-title,
+.mc-completed .mc-tb-time,
+.mc-completed .mc-agenda-title,
+.mc-completed .mc-agenda-time,
+.mc-completed .mc-agenda-note {
+	color: var(--text-muted);
+	text-decoration: line-through;
 }
 
 .mc-chip-time {
@@ -763,10 +826,17 @@
 }
 
 .mc-tb-title {
+	min-width: 0;
 	font-weight: 600;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.mc-tb-heading {
+	display: flex;
+	align-items: center;
+	gap: 3px;
 }
 
 .mc-tb-time {
@@ -856,16 +926,6 @@
 .mc-agenda-item:hover {
 	box-shadow: var(--shadow-s);
 	border-color: var(--mc-chip-color, var(--background-modifier-border));
-}
-
-.mc-agenda-dot {
-	width: 8px;
-	height: 8px;
-	box-sizing: border-box;
-	border-radius: 50%;
-	border: 1px solid var(--interactive-accent);
-	background: transparent;
-	flex-shrink: 0;
 }
 
 .mc-agenda-time {

@@ -15,6 +15,7 @@ import {
 } from './utils';
 import { acquireCalendarWidgetStyles } from './widget-styles';
 import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
+import { createCompletionToggle } from './event-completion';
 
 /**
  * 注册到 Home Widgets 宿主的组件定义。
@@ -128,10 +129,18 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			const chipEl = (ev: CalendarEvent): HTMLElement => {
 				const color = colorOf(ev.color);
 				const chip = el(doc, 'div', 'mcw-chip');
+				chip.classList.toggle('mcw-completed', !!ev.completed);
+				chip.setAttribute('data-event-id', ev.id);
 				chip.setAttribute('aria-label', eventDescription(ev));
-				chip.style.background = hexToRgba(color, 0.16);
-				chip.style.setProperty('--mcw-chip-color', color);
-				chip.append(el(doc, 'span', 'mcw-dot'));
+				chip.style.background = ev.completed ? 'var(--background-modifier-hover)' : hexToRgba(color, 0.16);
+				chip.style.setProperty('--mcw-chip-color', ev.completed ? 'var(--text-muted)' : color);
+				chip.append(createCompletionToggle(doc, ev, 'mcw-dot', async () => {
+					if (inPreview) {
+						context.notify('预览模式仅展示，请在 Obsidian 中标记日程完成');
+						return;
+					}
+					await plugin.toggleEventCompleted(ev.id);
+				}, error => context.notify(error instanceof Error ? error.message : '日程状态保存失败', true)));
 				if (ev.startTime && !isMultiDay(ev)) chip.append(el(doc, 'span', 'mcw-time', fmtTimeShort(ev.startTime)));
 				chip.append(el(doc, 'span', 'mcw-name', ev.title));
 				if (ev.important) chip.append(el(doc, 'span', 'mcw-star', '★'));

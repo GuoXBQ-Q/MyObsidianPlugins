@@ -91,6 +91,15 @@ export default class MyCalendarPlugin extends Plugin {
 		});
 	}
 
+	/** Toggle against the latest state so clicks from different views cannot overwrite edits. */
+	toggleEventCompleted(id: string): Promise<void> {
+		return this.persist(events => {
+			const current = events.find(item => item.id === id);
+			if (!current) throw new Error('日程已被删除，请刷新后重试');
+			return events.map(item => item.id === id ? { ...item, completed: !current.completed } : item);
+		});
+	}
+
 	private persist(change?: (events: CalendarEvent[]) => CalendarEvent[], customColor?: string): Promise<void> {
 		const job = this.saveQueue.catch(() => {}).then(async () => {
 			const previous = this.savedEvents;

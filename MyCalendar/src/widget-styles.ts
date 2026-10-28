@@ -215,14 +215,74 @@ export const MY_CALENDAR_WIDGET_CSS = `
 	cursor: pointer;
 }
 
-.mcw-dot {
-	width: 6px;
-	height: 6px;
+.mcw-root button.mcw-dot {
+	appearance: none;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 12px;
+	min-width: 12px;
+	height: 12px;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
 	box-sizing: border-box;
+	border: 0;
 	border-radius: 50%;
-	border: 1px solid var(--mcw-chip-color, var(--interactive-accent));
 	background: transparent;
-	flex-shrink: 0;
+	box-shadow: none;
+	color: var(--mcw-chip-color, var(--interactive-accent));
+	line-height: 1;
+	cursor: pointer;
+	flex: 0 0 12px;
+}
+
+.mcw-root button.mcw-dot::before {
+	content: '';
+	width: 7px;
+	height: 7px;
+	box-sizing: border-box;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+}
+
+.mcw-root button.mcw-dot[aria-pressed="true"]::before {
+	background: currentColor;
+}
+
+.mcw-root button.mcw-dot[aria-pressed="true"]::after {
+	content: '';
+	position: absolute;
+	width: 2px;
+	height: 4px;
+	border-right: 1px solid var(--background-primary);
+	border-bottom: 1px solid var(--background-primary);
+	transform: translateY(-1px) rotate(45deg);
+}
+
+.mcw-root button.mcw-dot:hover {
+	background: var(--background-modifier-hover);
+}
+
+.mcw-root button.mcw-dot:focus-visible {
+	outline: 2px solid var(--mcw-chip-color, var(--interactive-accent));
+	outline-offset: 1px;
+}
+
+.mcw-root button.mcw-dot:disabled {
+	cursor: wait;
+	opacity: 0.6;
+}
+
+.mcw-completed .mcw-time,
+.mcw-completed .mcw-name {
+	color: var(--text-muted);
+	text-decoration: line-through;
+}
+
+.mcw-completed .mcw-star {
+	color: var(--text-muted);
 }
 
 .mcw-time {
