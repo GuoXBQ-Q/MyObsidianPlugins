@@ -14,7 +14,7 @@ import {
 	weekdayLabels,
 } from './utils';
 import { acquireCalendarWidgetStyles } from './widget-styles';
-import { eventDescription, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
+import { eventDescription, freeDayLanes, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount } from './event-range';
 import { createCompletionToggle } from './event-completion';
 
 /**
@@ -166,8 +166,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				const weekStartIdx = plugin.settings.weekStart === 'monday' ? 1 : 0;
 				const gridStart = addDays(first, -(first.getDay() - weekStartIdx + 7) % 7);
 				const map = indexEvents(plugin.events, gridStart, 42, plugin.settings.newEventsAtBottom);
-				const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(plugin.events, addDays(gridStart, i * 7), 7, plugin.settings.newEventsAtBottom));
-				const lanes = weeks.map(spans => Math.max(0, ...spans.map(span => span.lane + 1)));
+				const weeks = monthRangeSegments(plugin.events, gridStart, 42, plugin.settings.newEventsAtBottom);
 
 				grid.replaceChildren();
 				for (let i = 0; i < 42; i++) {
@@ -179,7 +178,6 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					const cell = el(doc, 'div', 'mcw-cell');
 					const week = Math.floor(i / 7);
 					cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
-					cell.style.minHeight = `${50 + lanes[week] * 18}px`;
 					if (cellDate.getMonth() !== cursor.m - 1) cell.classList.add('mcw-other');
 					if (key === today) cell.classList.add('mcw-today');
 					if (evs.length) cell.classList.add('mcw-has-events');
@@ -207,11 +205,22 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					cell.append(top);
 
 					const chips = el(doc, 'div', 'mcw-chips');
-					chips.style.paddingTop = `${rangeLaneCount(weeks[week], i % 7) * 18}px`;
 					const singles = evs.filter(ev => !isMultiDay(ev));
-					for (const ev of singles.slice(0, 2)) chips.append(chipEl(ev));
+					const visible = singles.slice(0, 2);
+					const slots = freeDayLanes(weeks[week], i % 7, visible.length + Number(singles.length > 2));
+					const rows = Math.max(rangeLaneCount(weeks[week], i % 7), ...slots.map(lane => lane + 1));
+					chips.style.minHeight = `${Math.max(0, rows * 18 - 2)}px`;
+					cell.style.minHeight = `${Math.max(50, 28 + rows * 18)}px`;
+					for (const [index, ev] of visible.entries()) {
+						const chip = chipEl(ev);
+						chip.style.gridRow = String(slots[index] + 1);
+						chip.dataset.eventLane = String(slots[index]);
+						chips.append(chip);
+					}
 					if (singles.length > 2) {
 						const more = el(doc, 'div', 'mcw-chip mcw-more', `还有 ${singles.length - 2} 项…`);
+						more.style.gridRow = String(slots[visible.length] + 1);
+						more.dataset.eventLane = String(slots[visible.length]);
 						more.addEventListener('click', (e) => {
 							e.stopPropagation();
 							if (inPreview) {
@@ -236,6 +245,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				weeks.forEach((spans, week) => {
 					for (const span of spans) {
 						const bar = chipEl(span.ev); bar.classList.add('mcw-range-bar');
+						bar.dataset.eventLane = String(span.lane);
 						placeRangeBar(bar, span, week + 1, 24, 18); grid.append(bar);
 					}
 				});

@@ -5,7 +5,7 @@ import { EventModal } from './event-modal';
 import { createCompletionToggle } from './event-completion';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
-import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
+import { compareEvents, eventDescription, eventEndDate, freeDayLanes, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
 import {
 	addDays,
 	addMonths,
@@ -266,7 +266,7 @@ export class CalendarView extends ItemView {
 		const offset = (first.getDay() - weekStartIdx + 7) % 7;
 		const gridStart = addDays(first, -offset);
 		const map = this.eventsByDate(gridStart, 42);
-		const weeks = Array.from({ length: 6 }, (_, i) => rangeSegments(this.plugin.events, addDays(gridStart, i * 7), 7, settings.newEventsAtBottom));
+		const weeks = monthRangeSegments(this.plugin.events, gridStart, 42, settings.newEventsAtBottom);
 
 		const labels = weekdayLabels(settings.weekStart);
 		const wd = container.createDiv('mc-weekdays');
@@ -317,12 +317,22 @@ export class CalendarView extends ItemView {
 			});
 
 			const chips = cell.createDiv('mc-chips');
-			chips.style.paddingTop = `${rangeLaneCount(weeks[week], i % 7) * 22}px`;
 			const singles = evs.filter(ev => !isMultiDay(ev));
 			const maxChips = 3;
-			for (const ev of singles.slice(0, maxChips)) chips.append(this.chipEl(ev));
+			const visible = singles.slice(0, maxChips);
+			const slots = freeDayLanes(weeks[week], i % 7, visible.length + (singles.length > maxChips ? 1 : 0));
+			const rows = Math.max(rangeLaneCount(weeks[week], i % 7), (slots[slots.length - 1] ?? -1) + 1);
+			chips.style.minHeight = `${Math.max(0, rows * 22 - 2)}px`;
+			for (const [index, ev] of visible.entries()) {
+				const chip = this.chipEl(ev);
+				chip.style.gridRow = String(slots[index] + 1);
+				chip.dataset.eventLane = String(slots[index]);
+				chips.append(chip);
+			}
 			if (singles.length > maxChips) {
 				const more = chips.createDiv({ cls: 'mc-chip mc-more', text: `还有 ${singles.length - maxChips} 项…` });
+				more.style.gridRow = String(slots[visible.length] + 1);
+				more.dataset.eventLane = String(slots[visible.length]);
 				more.addEventListener('click', (e) => {
 					e.stopPropagation();
 					this.jumpTo(cellDate, 'day');
@@ -334,6 +344,7 @@ export class CalendarView extends ItemView {
 		weeks.forEach((spans, week) => {
 			for (const span of spans) {
 				const bar = this.chipEl(span.ev); bar.addClass('mc-range-bar');
+				bar.dataset.eventLane = String(span.lane);
 				placeRangeBar(bar, span, week + 1, 30, 22); grid.append(bar);
 			}
 		});

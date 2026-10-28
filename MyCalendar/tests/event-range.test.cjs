@@ -5,7 +5,7 @@ const Module = require('node:module');
 const esbuild = require('esbuild');
 const code = esbuild.buildSync({ entryPoints: [path.join(__dirname, '../src/event-range.ts')], bundle: true, write: false, platform: 'node', format: 'cjs' }).outputFiles[0].text;
 const compiled = new Module(__filename); compiled._compile(code, __filename);
-const { indexEvents, rangeSegments, rangeLaneCount, eventDescription, isMultiDay, eventEndDate, compareEvents } = compiled.exports;
+const { indexEvents, rangeSegments, monthRangeSegments, freeDayLanes, rangeLaneCount, eventDescription, isMultiDay, eventEndDate, compareEvents } = compiled.exports;
 const ev = (id, date, endDate) => ({ id, title: id, date, endDate, color: 'blue', createdAt: 0 });
 
 test('new events stay below existing events despite earlier times or titles, and editing preserves order', () => {
@@ -101,4 +101,79 @@ test('very long ranges are bounded to the visible window and descriptions retain
 	assert.equal(indexEvents([event], new Date(2026, 10, 1), 42).size, 42);
 	assert.equal(rangeSegments([event], new Date(2027, 0, 1))[0].end, 6);
 	assert.match(eventDescription(event), /2026-11-06 18:00 至 2036-11-09 09:00.*天津/);
+});
+
+test('month continuations retain their original lanes while daily and weekly views remain compact', () => {
+	const events = [ev('conference', '2026-11-05', '2026-11-08'), ev('inscrypt', '2026-11-06', '2026-11-10')];
+	for (const bottom of [false, true]) {
+		const weeks = monthRangeSegments(events, new Date(2026, 10, 2), 14, bottom);
+		assert.deepEqual(weeks[0].map(span => [span.ev.id, span.lane]), [['conference', 0], ['inscrypt', 1]]);
+		assert.deepEqual(weeks[1].map(span => [span.ev.id, span.start, span.end, span.lane]), [['inscrypt', 0, 1, 1]]);
+		assert.equal(weeks[1][0].continuesBefore, true);
+		assert.equal(weeks[1][0].continuesAfter, false);
+		assert.equal(rangeSegments(events, new Date(2026, 10, 9), 7, bottom)[0].lane, 0, 'week view compacts its own visible range');
+		assert.equal(rangeSegments(events, new Date(2026, 10, 9), 1, bottom)[0].lane, 0, 'day view also remains compact');
+	}
+});
+
+test('month lanes agree across viewport boundaries and reload even when the original blocker is outside the view', () => {
+	const events = [ev('blocker', '2026-10-01', '2026-10-20'), ev('long', '2026-10-15', '2026-11-18')];
+	const before = JSON.stringify(events);
+	for (const bottom of [false, true]) for (const first of [new Date(2026, 8, 28), new Date(2026, 9, 26), new Date(2026, 10, 2)]) {
+		const parts = monthRangeSegments(events, first, 42, bottom).flat().filter(span => span.ev.id === 'long');
+		assert(parts.length > 0 && parts.every(span => span.lane === 1));
+		const reloaded = JSON.parse(before);
+		assert.deepEqual(monthRangeSegments(reloaded, first, 42, bottom).map(week => week.map(span => [span.ev.id, span.lane])),
+			monthRangeSegments(events, first, 42, bottom).map(week => week.map(span => [span.ev.id, span.lane])));
+	}
+	assert.equal(JSON.stringify(events), before, 'layout cannot mutate saved order or events');
+});
+
+test('deleting or shortening an upper range recomputes every continuation together', () => {
+	const blocker = ev('conference', '2026-11-05', '2026-11-08'), long = ev('inscrypt', '2026-11-06', '2026-11-10');
+	const lanes = events => monthRangeSegments(events, new Date(2026, 10, 2), 14, true).flat().filter(span => span.ev.id === 'inscrypt').map(span => span.lane);
+	assert.deepEqual(lanes([blocker, long]), [1, 1]);
+	assert.deepEqual(lanes([long]), [0, 0]);
+	assert.deepEqual(lanes([{ ...blocker, endDate: '2026-11-05' }, long]), [0, 0]);
+});
+
+test('new ranges reuse the upper hole only when their entire inclusive interval fits', () => {
+	const older = { ...ev('conference', '2026-11-05', '2026-11-08'), createdAt: 100 };
+	const continued = { ...ev('inscrypt', '2026-11-06', '2026-11-10'), createdAt: 200 };
+	const fit = { ...ev('new', '2026-11-09', '2026-11-11'), createdAt: 300 };
+	const lanes = (events, id) => monthRangeSegments(events, new Date(2026, 10, 2), 14, true).flat().filter(span => span.ev.id === id).map(span => span.lane);
+	assert.deepEqual(lanes([older, continued, fit], 'new'), [0]);
+	assert.deepEqual(lanes([older, continued, { ...fit, date: '2026-11-08' }], 'new'), [2, 2], 'a shared end/start day is occupied');
+	const laterBlocker = { ...ev('later blocker', '2026-11-12', '2026-11-13'), createdAt: 250 };
+	assert.deepEqual(lanes([older, continued, laterBlocker, { ...fit, endDate: '2026-11-12' }], 'new'), [2], 'a collision later in the range must also prevent reuse');
+});
+
+test('month range order uses the existing creation preference and preserves equal legacy ordering', () => {
+	const older = { ...ev('Z', '2026-11-04', '2026-11-06'), createdAt: 100 };
+	const newer = { ...ev('A', '2026-11-02', '2026-11-07'), createdAt: 200 };
+	assert.deepEqual(monthRangeSegments([older, newer], new Date(2026, 10, 2), 7, true)[0].map(span => [span.ev.id, span.lane]), [['Z', 0], ['A', 1]]);
+	assert.deepEqual(monthRangeSegments([older, newer], new Date(2026, 10, 2), 7, false)[0].map(span => [span.ev.id, span.lane]), [['A', 0], ['Z', 1]]);
+	delete older.createdAt; delete newer.createdAt;
+	assert.deepEqual(monthRangeSegments([older, newer], new Date(2026, 10, 2), 7, true)[0].map(span => [span.ev.id, span.lane]), [['Z', 0], ['A', 1]]);
+});
+
+test('single-day slots and the overflow link fill holes without displacing continued ranges', () => {
+	const spans = monthRangeSegments([ev('conference', '2026-11-05', '2026-11-08'), ev('inscrypt', '2026-11-06', '2026-11-10')], new Date(2026, 10, 2), 14, true);
+	assert.deepEqual(freeDayLanes(spans[0], 4, 4), [2, 3, 4, 5], 'occupied first and second lanes are both skipped');
+	assert.deepEqual(freeDayLanes(spans[1], 0, 4), [0, 2, 3, 4], 'single items and the more link can use the first lane above a continuation');
+	assert.deepEqual(freeDayLanes(spans[1], 2, 4), [0, 1, 2, 3], 'unrelated days keep all rows free');
+	assert.deepEqual(freeDayLanes([], 0, 0), []);
+	const withSingles = [ev('conference', '2026-11-05', '2026-11-08'), ev('inscrypt', '2026-11-06', '2026-11-10'), ev('single', '2026-11-09')];
+	assert.deepEqual(monthRangeSegments(withSingles, new Date(2026, 10, 9), 7, true)[0].map(span => [span.ev.id, span.lane]), [['inscrypt', 1]], 'hidden or visible single items do not move range bars');
+});
+
+test('month clipping stays bounded for decades-long ranges, partial weeks and year boundaries', () => {
+	const events = [ev('blocker', '1900-01-01', '1900-02-01'), ev('centuries', '1900-01-31', '2099-12-31')];
+	const weeks = monthRangeSegments(events, new Date(2026, 11, 28), 10, true);
+	assert.equal(weeks.length, 2);
+	assert.deepEqual(weeks.map(week => week.map(span => [span.start, span.end, span.lane, span.continuesBefore, span.continuesAfter])),
+		[[[0, 6, 1, true, true]], [[0, 2, 1, true, true]]]);
+	assert.equal(monthRangeSegments(events, new Date(2026, 11, 28), 0).length, 0);
+	const leap = monthRangeSegments([ev('leap', '2028-02-28', '2028-03-01')], new Date(2028, 1, 27), 7)[0][0];
+	assert.deepEqual([leap.start, leap.end], [1, 3]);
 });

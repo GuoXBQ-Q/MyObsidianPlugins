@@ -111,7 +111,7 @@ export const MY_CALENDAR_WIDGET_CSS = `
 }
 .mcw-range-bar.mc-range-before { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .mcw-range-bar.mc-range-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.mcw-top { flex-shrink: 0; }
+.mcw-top { flex-shrink: 0; height: 18px; }
 
 .mcw-cell:hover {
 	box-shadow: inset 0 0 0 1.5px var(--mcw-ring, var(--background-modifier-border));
@@ -195,9 +195,13 @@ export const MY_CALENDAR_WIDGET_CSS = `
 }
 
 .mcw-chips {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	grid-auto-rows: 16px;
+	align-content: start;
 	gap: 2px;
+	margin-top: 1px;
+	flex-shrink: 0;
 	min-height: 0;
 	overflow: hidden;
 }

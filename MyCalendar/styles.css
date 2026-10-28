@@ -224,7 +224,15 @@
 .mc-range-bar.mc-range-before { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .mc-range-bar.mc-range-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .mc-cell-top { flex-shrink: 0; }
-.mc-month-grid .mc-chips { flex-shrink: 0; }
+.mc-month-grid .mc-chips {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	grid-auto-rows: 20px;
+	align-content: start;
+	gap: 2px;
+	margin-top: 1px;
+	flex-shrink: 0;
+}
 .mc-row3.is-range { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 24px minmax(0, 1.3fr) minmax(0, 1fr); }
 .mc-modal .mc-row3.is-range .mc-date-field { grid-column: auto; }
 .mc-end-date-field[hidden] { display: none; }

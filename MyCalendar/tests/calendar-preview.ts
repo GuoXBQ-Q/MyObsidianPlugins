@@ -29,10 +29,11 @@ document.getElementById('calendar')!.append(view.contentEl);
 void view.onOpen();
 view.jumpTo(new Date(2026, 10, 6), 'month');
 const cleanups: (() => void)[] = [];
+const widgetLocal = { cursor: { y: 2026, m: 11 } };
 void createMyCalendarWidget(plugin as any).mount({
 	id: 'preview', config: {}, doc: document, el: document.getElementById('widget')!, actions: document.createElement('div'),
 	platform: { vaultId: 'preview', preview: false }, lifetime: { own: cleanup => { cleanups.push(cleanup); return cleanup; } },
-	local: { cursor: { y: 2026, m: 11 } }, notify: message => { document.getElementById('notice')!.textContent = message; },
+	local: widgetLocal, notify: message => { document.getElementById('notice')!.textContent = message; },
 });
 
 // Isolated browser regression fixtures; never read or write vault data.
@@ -40,6 +41,8 @@ void createMyCalendarWidget(plugin as any).mount({
 	setEvents(events: CalendarEvent[]) { plugin.events = events; void plugin.saveAll(); },
 	show(date: string, mode: 'month' | 'week' | 'day' | 'agenda') { view.jumpTo(new Date(date + 'T12:00:00'), mode); },
 	setWeekStart(value: 'monday' | 'sunday') { plugin.settings.weekStart = value; void plugin.saveAll(); },
+	setMonth(y: number, m: number) { widgetLocal.cursor.y = y; widgetLocal.cursor.m = m; view.jumpTo(new Date(y, m - 1, 6), 'month'); void plugin.saveAll(); },
+	setNewEventsAtBottom(value: boolean) { plugin.settings.newEventsAtBottom = value; void plugin.saveAll(); },
 	getEvents() { return JSON.parse(JSON.stringify(plugin.events)); },
 	setCompletionError(message: string | null) { completionError = message; },
 };

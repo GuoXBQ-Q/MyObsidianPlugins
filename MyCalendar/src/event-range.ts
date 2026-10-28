@@ -55,6 +55,41 @@ export function rangeSegments(events: CalendarEvent[], start: Date, count = 7, n
 	return spans;
 }
 
+/** Assign full ranges once, then clip: changing weeks or months cannot change their lanes. */
+export function monthRangeSegments(events: CalendarEvent[], start: Date, count = 42, newEventsAtBottom = false): RangeSegment[][] {
+	if (count <= 0) return [];
+	const ranges = events.filter(isMultiDay).sort((a, b) => newEventsAtBottom
+		? compareEvents(a, b, true)
+		: a.date.localeCompare(b.date) || eventEndDate(b).localeCompare(eventEndDate(a)) || a.id.localeCompare(b.id));
+	const lanes: CalendarEvent[][] = [];
+	const assigned = ranges.map(ev => {
+		let lane = lanes.findIndex(items => items.every(item => eventEndDate(item) < ev.date || item.date > eventEndDate(ev)));
+		if (lane < 0) { lane = lanes.length; lanes.push([]); }
+		lanes[lane].push(ev);
+		return { ev, lane };
+	});
+	return Array.from({ length: Math.ceil(count / 7) }, (_, week) => {
+		const weekStart = addDays(start, week * 7);
+		const days = Array.from({ length: Math.min(7, count - week * 7) }, (_, day) => fmtDate(addDays(weekStart, day)));
+		return assigned.filter(({ ev }) => ev.date <= days[days.length - 1] && eventEndDate(ev) >= days[0])
+			.map(({ ev, lane }) => ({
+				ev, lane,
+				start: Math.max(0, days.findIndex(day => day >= ev.date)),
+				end: days.reduce((end, day, i) => day <= eventEndDate(ev) ? i : end, 0),
+				continuesBefore: ev.date < days[0],
+				continuesAfter: eventEndDate(ev) > days[days.length - 1],
+			}));
+	});
+}
+
+/** Find slots for visible single-day events and their overflow link around this day's ranges. */
+export function freeDayLanes(spans: RangeSegment[], dayIndex: number, count: number): number[] {
+	const occupied = new Set(spans.filter(span => span.start <= dayIndex && span.end >= dayIndex).map(span => span.lane));
+	const free: number[] = [];
+	for (let lane = 0; free.length < count; lane++) if (!occupied.has(lane)) free.push(lane);
+	return free;
+}
+
 /** Reserve space only for range bars that intersect this date, preserving their shared lanes. */
 export function rangeLaneCount(spans: RangeSegment[], dayIndex: number): number {
 	return spans.reduce((count, span) => span.start <= dayIndex && span.end >= dayIndex ? Math.max(count, span.lane + 1) : count, 0);
