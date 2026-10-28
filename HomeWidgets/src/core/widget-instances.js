@@ -5,8 +5,16 @@ function createWidgetInstance(def,title=''){
   return {id:def.type+'-'+crypto.randomUUID(),type:def.type,title:title.trim()||def.label,span:def.span||4,tint:'plain',settings:JSON.parse(JSON.stringify(def.defaults||{}))};
 }
 
-function showNewWidget(forms,registry,store,type,{title='',draft=false}={}){
-  const def=registry.get(type),item=createWidgetInstance(def,title);
+async function showNewWidget(forms,registry,store,type,{title='',draft=false,locate=()=>{},isActive=()=>true}={}){
+  const def=registry.get(type);if(!def)throw new Error('此组件类型尚未连接，无法新建实例');
+  const existing=(await store.load()).widgets.find(item=>item.type===type);
+  if(!isActive())return;
+  if(def.supportsMultipleInstances!==true&&existing){
+    return forms.show('组件已添加',[],{},async()=>{if(existing.hidden)await store.patchWidget(existing.id,{hidden:false});await locate(existing.id);},existing.hidden?'恢复显示':'定位组件',{
+      description:'「'+(existing.title||def.label)+'」已占用此类型的唯一名额。'+(existing.hidden?'恢复原实例可保留已有配置。':'可直接定位并继续使用。')
+    });
+  }
+  const item=createWidgetInstance(def,title);
   return forms.show('新增实例 · '+def.label,configureFields(def),configureInitial(item,def),async value=>{
     if(!registry.get(type))throw new Error('此组件类型已断开，请连接对应插件后重试');
     const patch=configurePatch(item,def,value);

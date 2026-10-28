@@ -21,7 +21,7 @@ class Node {
 const doc={createElement:tag=>new Node(tag),createElementNS:(ns,tag)=>new Node(tag),createTextNode:text=>({nodeType:3,textContent:text}),addEventListener(){},removeEventListener(){},defaultView:{addEventListener(){},removeEventListener(){}}};
 async function fixture(text){
   const source='Home/tasks.md',layoutPath='Home/widgets.json',bus=new Bus(),queues=new Map(),notices=[],dialogs=[];
-  const files=new Map([[source,text],[layoutPath,JSON.stringify({version:2,theme:'native',widgets:['work-a','work-b','life'].map(id=>({id,type:'tasks',title:id,span:4,settings:{source,area:id==='life'?'life':'work'}}))})]]);
+  const files=new Map([[source,text],[layoutPath,JSON.stringify({version:3,theme:'native',widgets:['work-a','work-b','life'].map(id=>({id,type:'tasks',title:id,span:4,settings:{source,area:id==='life'?'life':'work'}}))})]]);
   const io={read:async path=>files.get(path),update:async(path,fn)=>{
     const job=(queues.get(path)||Promise.resolve()).catch(()=>{}).then(()=>files.set(path,fn(files.get(path))));queues.set(path,job);await job;
   }};

@@ -1,12 +1,11 @@
 const {daysUntil}=require('./date');
 const {assertFields}=require('../core/format');
-function collectionKey(source='default'){return String(source??'default').trim();}
 function schema(data){
-  if(data.countdowns===undefined)return {version:1,collections:{}};
+  if(data.countdowns===undefined)return {version:2,events:[]};
   const value=data.countdowns;
-  assertFields(value,['version','collections'],'倒计时配置');
-  if(!value||value.version!==1||!value.collections||typeof value.collections!=='object'||Array.isArray(value.collections))throw new Error('倒计时 JSON 数据格式或版本不受支持，已保留原数据');
-  for(const collection of Object.values(value.collections))assertFields(collection,['events'],'日期集合');
+  if(!value||value.version!==2)throw new Error('倒计时 JSON 数据格式或版本不受支持，已保留原数据');
+  assertFields(value,['version','events','calendarDisplay'],'倒计时配置');
+  validate(value.events);
   return value;
 }
 function validate(events){
@@ -23,33 +22,28 @@ function validate(events){
   return events;
 }
 function createPersistentEventService(data,bus){
-  async function ensure(source){
-    const key=collectionKey(source);
-    if(!key||/[\\/]/.test(key)||/\.md$/i.test(key))throw new Error('日期集合请填写名称（例如 default），不再支持笔记路径');
-    const root=await data.read(),current=schema(root);
-    if(Object.hasOwn(current.collections,key)){validate(current.collections[key]?.events);return key;}
+  async function ensure(){
+    const root=await data.read();schema(root);
+    if(root.countdowns!==undefined)return;
     await data.update(latest=>{
-      const state=schema(latest);if(Object.hasOwn(state.collections,key))return latest;
-      return {...latest,countdowns:{...state,collections:{...state.collections,[key]:{events:[]}}}};
+      return latest.countdowns===undefined?{...latest,countdowns:schema(latest)}:latest;
     });
-    return key;
   }
-  async function change(source,transform){
-    const key=await ensure(source);
+  async function change(transform){
+    await ensure();
     await data.update(root=>{
-      const state=schema(root),collection=state.collections[key];validate(collection.events);
-      const events=validate(transform(collection.events));
-      return {...root,countdowns:{...state,collections:{...state.collections,[key]:{...collection,events}}}};
+      const state=schema(root),events=validate(transform(state.events));
+      return {...root,countdowns:{...state,events}};
     });
-    bus?.emit('countdown:'+key);
+    bus?.emit('countdown');
   }
   function confirmed(events,event){
     const current=events.find(item=>item.id===event?.id);
-    if(!current||['id','title','date','start','area'].some(key=>(current[key]||'')!==(event[key]||''))||(current.archived??false)!==(event.archived??false))throw new Error('日期记录已变化，请刷新后重新确认');
+    if(!current||['id','title','date','start','area','calendarEventId'].some(key=>(current[key]||'')!==(event[key]||''))||(current.archived??false)!==(event.archived??false))throw new Error('日期记录已变化，请刷新后重新确认');
     return current;
   }
-  async function setArchived(source,event,archived){
-    await change(source,events=>{
+  async function setArchived(event,archived){
+    await change(events=>{
       const current=confirmed(events,event);
       if((current.archived===true)===archived)throw new Error('日期归档状态已变化，请刷新后重新确认');
       return events.map(item=>{
@@ -60,13 +54,15 @@ function createPersistentEventService(data,bus){
     });
   }
   return {
-    async list(source,{includeArchived=false}={}){const key=await ensure(source),root=await data.read(),events=validate(schema(root).collections[key].events);return includeArchived?events:events.filter(event=>!event.archived);},
-    async save(source,value){
+    sourceStatus:async()=>null,
+    canClearFeatured:async()=>true,
+    async list(options={}){assertFields(options,['includeArchived'],'日期读取选项');await ensure();const events=schema(await data.read()).events;return options.includeArchived?events:events.filter(event=>!event.archived);},
+    async save(value){
       const clean=text=>String(text||'').replace(/[\r\n]+/g,' ').trim();
       const title=clean(value.title);if(!title)throw new Error('请填写日期名称');
       daysUntil(value.date);if(value.start){daysUntil(value.start);if(value.start>value.date)throw new Error('开始日期不能晚于目标日期');}
       const item={id:value.id||'event-'+crypto.randomUUID(),title,date:value.date,start:value.start||'',area:clean(value.area)};
-      await change(source,events=>{
+      await change(events=>{
         if(!value.id)return [...events,item];
         const current=events.find(event=>event.id===value.id);
         if(!current)throw new Error('日期记录已变化，请刷新后再编辑');
@@ -74,14 +70,14 @@ function createPersistentEventService(data,bus){
         return events.map(event=>event.id===value.id?item:event);
       });
     },
-    async remove(source,event){
-      await change(source,events=>{
+    async remove(event){
+      await change(events=>{
         confirmed(events,event);
         return events.filter(item=>item.id!==event.id);
       });
     },
-    archive:(source,event)=>setArchived(source,event,true),
-    restore:(source,event)=>setArchived(source,event,false)
+    archive:event=>setArchived(event,true),
+    restore:event=>setArchived(event,false)
   };
 }
-module.exports={createPersistentEventService,collectionKey};
+module.exports={createPersistentEventService,schema,validate};

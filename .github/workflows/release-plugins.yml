@@ -49,8 +49,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ./scripts/Build-PluginRelease.ps1 -Tag $env:RELEASE_TAG -CheckPreviousRelease
-          node --test shared/tests/bundles.test.cjs
-          if ($LASTEXITCODE -ne 0) { throw 'Bundled updater integration tests failed' }
+          node --test shared/tests/bundles.test.cjs shared/tests/calendar-integration.test.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled plugin integration tests failed' }
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -5,8 +5,17 @@ import { normalizeTime } from '../src/time-picker';
 import { parsePickerDate } from '../src/date-picker';
 
 const store = {
+	isCountdownAvailable: () => false,
 	settings: { ...DEFAULT_SETTINGS, customColors: ['#a8b5d1'] },
 	events: [] as CalendarEvent[],
+	async saveEvent(value: CalendarEvent, existing: CalendarEvent | null) {
+		const copy = JSON.parse(JSON.stringify(value));
+		this.events = existing ? this.events.map(event => event.id === value.id ? copy : event) : [...this.events, copy];
+		const color = normalizeHex(value.color);
+		if (color) this.settings.customColors = [...new Set([color, ...this.settings.customColors])].slice(0, 12);
+		await this.saveAll();
+	},
+	async deleteEvent(value: CalendarEvent) { this.events = this.events.filter(event => event.id !== value.id); await this.saveAll(); },
 	async saveAll() { document.getElementById('saved')!.textContent = JSON.stringify({ events: this.events, customColors: this.settings.customColors }, null, 2); },
 };
 let modal: EventModal;

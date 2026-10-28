@@ -23,6 +23,8 @@ npm --prefix MyCalendar run deploy
 
 验证：各项目运行 `npm test`；MyCalendar 另运行 `npm run typecheck`。共用更新器测试为 `node --test shared/tests`，运行前先构建两个插件。
 
+当前组件规则：唯一首页布局 `Home/widgets.json`（version 3），分类待办允许多实例，其余内置组件与 MyCalendar 为全库单实例。倒计时使用 version 2 单列表和 version 2 日历来源契约；外部组件注册 API 为 v3。双方需要同时更新，旧数据先备份并一次性整理。
+
 ## 保存与回滚
 
 ```powershell

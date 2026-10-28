@@ -19,7 +19,7 @@ async function main(){
     await page.evaluate(async()=>{
       const widgets=['primary','mirror'].map(id=>({id,type:'tasks',title:id==='primary'?'工作待办':'同源另一实例',span:6,settings:{source:'tasks.md',area:'work',showCompleted:true,limit:20}}));
       widgets.push({id:'life',type:'tasks',title:'同文件生活待办',span:6,settings:{source:'tasks.md',area:'life'}},{id:'separate',type:'tasks',title:'另一来源待办',span:6,settings:{source:'other.md',area:'work'}});
-      window.files=new Map([['Home/widgets.json',JSON.stringify({version:2,theme:'native',widgets})],['other.md','- [ ] 独立任务 #area/work ^independent\n'],['tasks.md','- [ ] 把这一周安排好 #area/work ^p\n  - [x] 整理学习资料 ^a\n  - [ ] 读完第一章，记下三个问题 ^b\n- [ ] 傍晚散步 20 分钟 #area/work ^other\n- [ ] 周五小组讨论，提前准备好 #area/work ^third\n- [ ] 生活任务 #area/life ^life-task\n']]);
+      window.files=new Map([['Home/widgets.json',JSON.stringify({version:3,theme:'native',widgets})],['other.md','- [ ] 独立任务 #area/work ^independent\n'],['tasks.md','- [ ] 把这一周安排好 #area/work ^p\n  - [x] 整理学习资料 ^a\n  - [ ] 读完第一章，记下三个问题 ^b\n- [ ] 傍晚散步 20 分钟 #area/work ^other\n- [ ] 周五小组讨论，提前准备好 #area/work ^third\n- [ ] 生活任务 #area/life ^life-task\n']]);
       const revisions=new Map();
       window.fetch=async(url,options)=>{
         const request=JSON.parse(options.body),p=request.path;let result;

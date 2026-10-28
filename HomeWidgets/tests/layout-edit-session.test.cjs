@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {Bus}=require('../src/core/lifecycle');
 const {createLayoutStore}=require('../src/services/layout');
 const {createLayoutEditSession}=require('../src/core/layout-edit-session');
-const initial={version:2,theme:'native',widgets:[{id:'one',type:'tasks',title:'工作',span:4,settings:{area:'work'}},{id:'two',type:'countdown',title:'日期',span:5,settings:{upcoming:0}}]};
+const initial={version:3,theme:'native',widgets:[{id:'one',type:'tasks',title:'工作',span:4,settings:{area:'work'}},{id:'two',type:'countdown',title:'日期',span:5,settings:{upcoming:0}}]};
 function fixture(){
   let text=JSON.stringify(initial),writes=0,fail=false;const bus=new Bus();
   const io={read:async()=>text,update:async(path,fn)=>{if(fail)throw Error('write failed');const next=fn(text);text=next;writes++;bus.changed(path);}};

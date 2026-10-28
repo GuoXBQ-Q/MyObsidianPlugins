@@ -5,7 +5,7 @@ const {chromium}=require(process.env.HOME_WIDGETS_PLAYWRIGHT||'playwright');
 const root=path.resolve(__dirname,'..'),vault=path.dirname(root);
 const output=path.join(root,'preview','settings');fs.mkdirSync(output,{recursive:true});
 function obsidianAsset(name){
-  const file=path.join(process.env.APPDATA,'obsidian','obsidian-1.14.4.asar'),data=fs.readFileSync(file);
+  const file=(process.env.OBSIDIAN_ASAR||path.join(process.env.APPDATA,'obsidian',fs.readdirSync(path.join(process.env.APPDATA,'obsidian')).filter(n=>/^obsidian-.*\.asar$/.test(n)).sort().pop())),data=fs.readFileSync(file);
   const header=JSON.parse(data.subarray(16,16+data.readUInt32LE(12))),entry=header.files[name],start=8+data.readUInt32LE(4)+Number(entry.offset);
   return data.subarray(start,start+entry.size).toString('utf8');
 }
@@ -14,6 +14,7 @@ async function main(){
   try{
     const page=await browser.newPage({viewport:{width:820,height:980},deviceScaleFactor:1}),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
+    await page.route('http://127.0.0.1/settings-test',route=>route.fulfill({contentType:'text/html',body:'<!doctype html>'}));await page.goto('http://127.0.0.1/settings-test');
     await page.setContent('<!doctype html><html><head><meta charset="utf-8"></head><body class="theme-light"><main id="frame"><div id="settings" class="vertical-tab-content"></div></main></body></html>');
     await page.addStyleTag({content:obsidianAsset('app.css')});
     await page.addStyleTag({content:fs.readFileSync(path.join(vault,'.obsidian/themes/AnuPpuccin/theme.css'),'utf8')});
@@ -35,12 +36,16 @@ async function main(){
       window.require=()=>obsidian;window.module={exports:{}};
     `});
     await page.addScriptTag({content:fs.readFileSync(path.join(root,'build/main.js'),'utf8')});
-    const fixture=fs.readFileSync(path.join(vault,'Home/widgets.json'),'utf8');
+    const fixture=JSON.stringify({version:3,theme:'native',widgets:[
+      {id:'banner',type:'banner',title:'Banner',span:12,hidden:true,settings:{}},
+      ...['work','life','study'].map(area=>({id:'tasks-'+area,type:'tasks',title:area==='work'?'工作待办':area,span:4,height:380,settings:{source:'Home/tasks.md',area}})),
+      {id:'calendar',type:'my-calendar',title:'Calendar',span:12,settings:{showLunar:true}}
+    ]});
     await page.evaluate(async text=>{
       window.savedLayout=text;window.layoutReads=0;window.layoutWrites=0;
       window.plugin=new window.module.exports({plugins:{plugins:{dataview:{api:{}}}},vault:{on(){}},workspace:{openLinkText(){}}});
       await plugin.onload();plugin.io={read:async()=>{layoutReads++;return savedLayout;},update:async(p,fn)=>{layoutWrites++;savedLayout=fn(savedLayout);}};
-      window.disconnectCalendar=plugin.api.registerWidget({type:'my-calendar',label:'MyCalendar 日历',icon:'📅',span:12,defaults:{showLunar:true,showFestivals:true,showHolidays:true},fields:[{key:'showLunar',label:'显示农历',type:'checkbox'},{key:'showFestivals',label:'显示节日与节气',type:'checkbox'},{key:'showHolidays',label:'显示休/班角标',type:'checkbox'}],mount(){}},{pluginId:'my-calendar',pluginName:'MyCalendar'});
+      window.openWidgetCalls=[];plugin.openWidget=async id=>openWidgetCalls.push(id);window.disconnectCalendar=plugin.api.registerWidget({type:'my-calendar',label:'MyCalendar 日历',icon:'📅',span:12,defaults:{showLunar:true,showFestivals:true,showHolidays:true},fields:[{key:'showLunar',label:'显示农历',type:'checkbox'},{key:'showFestivals',label:'显示节日与节气',type:'checkbox'},{key:'showHolidays',label:'显示休/班角标',type:'checkbox'}],mount(){}},{pluginId:'my-calendar',pluginName:'MyCalendar'});
       plugin.settingsTab.display();
     },fixture);
     await page.getByRole('combobox',{name:'页面最大宽度',exact:true}).waitFor();
@@ -61,7 +66,12 @@ async function main(){
     assert.equal(await page.getByRole('combobox',{name:'正文字号',exact:true}).inputValue(),'15');
     await page.getByRole('tab',{name:'内置组件',exact:true}).click();
     assert.equal(await page.getByRole('tab',{name:'MyCalendar 日历',exact:true}).count(),0);
+    await page.getByRole('button',{name:'已添加 Banner',exact:true}).click();
+    await page.getByRole('dialog').getByRole('button',{name:'恢复显示',exact:true}).click();
+    await page.waitForFunction(()=>JSON.parse(savedLayout).widgets.find(w=>w.id==='banner').hidden===false);
+    assert.equal(await page.evaluate(()=>JSON.parse(savedLayout).widgets.filter(w=>w.type==='banner').length),1);
     await page.getByRole('tab',{name:'分类待办',exact:true}).click();
+    await page.getByRole('button',{name:'新增实例 分类待办',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'取消',exact:true}).click();
     assert.equal(await page.getByRole('switch').count(),3);
     await page.screenshot({path:path.join(output,'builtin-light.png'),fullPage:true});
     await page.getByRole('switch',{name:'在首页显示 工作待办',exact:true}).uncheck();
@@ -78,7 +88,7 @@ async function main(){
     await page.evaluate(()=>disconnectCalendar());
     await page.getByText('该组件的插件尚未连接。已有配置已保留；连接后可继续编辑组件专属设置。',{exact:true}).waitFor();
     await page.screenshot({path:path.join(output,'external-disconnected.png'),fullPage:true});
-    const writes=await page.evaluate(()=>layoutWrites);assert.equal(writes,7);
+    assert.equal(await page.evaluate(()=>JSON.parse(savedLayout).widgets.filter(w=>w.type==='banner').length),1);
     for(const width of [390,820]){
       await page.setViewportSize({width,height:980});
       assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'settings overflow at '+width);

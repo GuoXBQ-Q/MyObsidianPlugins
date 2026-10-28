@@ -1135,6 +1135,9 @@
 	gap: 8px;
 	margin: 12px 0 16px;
 }
+.mc-countdown-settings { margin: 0 0 16px; padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+.mc-countdown-settings[hidden], .mc-countdown-help[hidden], .mc-event-options .mc-option-card[hidden] { display: none; }
+.mc-countdown-help { margin: 8px 0 0; color: var(--text-muted); font-size: .75em; line-height: 1.7; }
 .mc-event-options .mc-option-card {
 	display: inline-flex; align-items: center; gap: 8px;
 	min-height: 44px; min-width: 0; flex: 0 1 180px;
@@ -1170,7 +1173,7 @@
 @container mc-event-form (max-width: 600px) {
 	.mc-row3.is-range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.mc-row3.is-range .mc-date-range-arrow { grid-column: 1 / -1; height: 24px; width: 24px; justify-self: center; transform: rotate(90deg); }
-	.mc-event-options .mc-option-card { flex: 1 1 0; gap: 8px; padding: 8px 10px; }
+	.mc-event-options .mc-option-card { flex: 1 1 140px; gap: 8px; padding: 8px 10px; }
 }
 @container mc-event-form (max-width: 300px) {
 	.mc-event-options { flex-direction: column; align-items: stretch; }

@@ -4,20 +4,19 @@ const root=path.resolve(__dirname,'..'),vault=path.dirname(root);
 const taskRemovalPreview=process.env.HOME_WIDGETS_TASK_REMOVAL_PREVIEW==='1';
 const editPreview=process.env.HOME_WIDGETS_LAYOUT_PREVIEW==='1'||taskRemovalPreview;let writes=0;
 const capturePreview=process.env.HOME_WIDGETS_CAPTURE_PREVIEW==='1';
-let pluginData={countdowns:{version:1,collections:{default:{events:[
+let pluginData={countdowns:{version:2,events:[
  {id:'event-project',title:'项目里程碑',date:'2026-11-01',start:'2026-10-01',area:'工作'},
  {id:'event-weekend',title:'留给自己的周末',date:'2026-10-18',area:'生活'},
  {id:'event-newyear',title:'迎接新的一年',date:'2027-01-01',area:'生活'},
  {id:'event-old',title:'已结束',date:'2026-10-01',area:'工作'}
-]}}}},pluginVersion=0;
+]}},pluginVersion=0;
 function appStyles(){
   const folder=path.join(process.env.APPDATA,'obsidian'),archive=fs.readdirSync(folder).filter(n=>/^obsidian-.*\.asar$/.test(n)).sort().pop();
   const data=fs.readFileSync(path.join(folder,archive)),header=JSON.parse(data.subarray(16,16+data.readUInt32LE(12))),entry=header.files['app.css'],start=8+data.readUInt32LE(4)+Number(entry.offset);
   return data.subarray(start,start+entry.size);
 }
-const layout={version:2,theme:'native',widgets:[{id:'countdown',type:'countdown',title:'值得期待的日子',span:12,height:440,settings:{source:'default',featured:'event-project',upcoming:0}}]};
+const layout={version:3,theme:'native',widgets:[{id:'countdown',type:'countdown',title:'值得期待的日子',span:12,height:440,settings:{featured:'event-project',upcoming:0}}]};
 if(capturePreview)layout.widgets=[{id:'capture-preview',type:'capture',title:'捕捉一闪而过的灵感',span:12,height:298,settings:{folder:'Inbox/Ideas'}}];
-if(editPreview&&!capturePreview)layout.widgets.push({...layout.widgets[0],id:'countdown-second',title:'第二张卡片'});
 if(taskRemovalPreview)layout.widgets=[
  {id:'tasks-work',type:'tasks',title:'工作待办',span:6,settings:{source:'Home/待办.md',area:'work',showCompleted:false,limit:1}},
  {id:'tasks-work-peer',type:'tasks',title:'工作分类副本',span:6,settings:{source:'Home/待办.md',area:'work'}},

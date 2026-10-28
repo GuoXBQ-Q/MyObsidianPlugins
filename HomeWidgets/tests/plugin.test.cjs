@@ -1,29 +1,34 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 
 test('native plugin JSON persistence preserves dates when settings are saved and across reloads',async()=>{
- let disk={homeFile:'homepage.md',countdowns:{version:1,collections:{default:{events:[]}}}};
+ let disk={homeFile:'homepage.md',countdowns:{version:2,events:[]}};
  class Component{constructor(){this.cleanup=[];}register(fn){this.cleanup.push(fn);}unload(){for(const fn of this.cleanup.splice(0).reverse())fn();}}
  class Plugin extends Component{constructor(app){super();this.app=app;}async loadData(){return JSON.parse(JSON.stringify(disk));}async saveData(value){disk=JSON.parse(JSON.stringify(value));}registerMarkdownCodeBlockProcessor(){}registerEvent(){}addRibbonIcon(){}addCommand(){}addSettingTab(){}}
  const obsidian={Plugin,Component,MarkdownRenderChild:Component,MarkdownRenderer:{},PluginSettingTab:class{},Setting:class{},Notice:class{},parseYaml:()=>({})};
  const sandbox={module:{exports:{}},require:()=>obsidian,AbortController,crypto,console,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask};
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../build/main.js'),'utf8'),sandbox);
  const app={plugins:{plugins:{}},vault:{on:()=>({})},workspace:{}},PluginClass=sandbox.module.exports,plugin=new PluginClass(app);await plugin.onload();
- plugin.settings.homeFile='Home/新首页.md';await Promise.all([plugin.saveSettings(),plugin.services.events.save('default',{title:'JSON 日期',date:'2027-01-01',area:'生活'})]);
- assert.equal(disk.homeFile,'Home/新首页.md');assert.equal(disk.countdowns.collections.default.events.length,1);plugin.unload();
- const reloaded=new PluginClass(app);await reloaded.onload();assert.equal(reloaded.settings.homeFile,'Home/新首页.md');assert.equal((await reloaded.services.events.list('default'))[0].title,'JSON 日期');reloaded.unload();
+ plugin.settings.homeFile='Home/新首页.md';await Promise.all([plugin.saveSettings(),plugin.services.events.save({title:'JSON 日期',date:'2027-01-01',area:'生活'})]);
+ assert.equal(disk.homeFile,'Home/新首页.md');assert.equal(disk.countdowns.events.length,1);plugin.unload();
+ const reloaded=new PluginClass(app);await reloaded.onload();assert.equal(reloaded.settings.homeFile,'Home/新首页.md');assert.equal((await reloaded.services.events.list())[0].title,'JSON 日期');reloaded.unload();
 });
 test('built plugin loads through the Obsidian entry contract and unregisters owned renderers',async()=>{
  class Component{constructor(){this.cleanup=[];}load(){return this.onload?.();}register(fn){this.cleanup.push(fn);}unload(){for(const fn of this.cleanup.splice(0).reverse())fn();}}
  class Plugin extends Component{constructor(app){super();this.app=app;this.processors={};this.commands=[];}async loadData(){return null;}registerMarkdownCodeBlockProcessor(type,fn){this.processors[type]=fn;}registerEvent(){}addRibbonIcon(){}addCommand(command){this.commands.push(command);}addSettingTab(){}async saveData(){}}
  class MarkdownRenderChild extends Component{constructor(el){super();this.containerEl=el;}}
- const obsidian={Plugin,MarkdownRenderChild,Component,MarkdownRenderer:{render:async()=>{}},PluginSettingTab:class{},Setting:class{},Notice:class{},parseYaml:()=>({})};
+ const obsidian={Plugin,MarkdownRenderChild,Component,MarkdownRenderer:{render:async()=>{}},PluginSettingTab:class{},Setting:class{},Notice:class{},parseYaml:JSON.parse};
  const sandbox={module:{exports:{}},require:name=>{assert.equal(name,'obsidian');return obsidian;},AbortController,crypto,console,setTimeout,clearTimeout,setInterval,clearInterval,queueMicrotask};
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../build/main.js'),'utf8'),sandbox);
  const app={plugins:{plugins:{}},vault:{on:()=>({}),getName:()=> 'test'},workspace:{openLinkText:()=>{}}};
- const plugin=new sandbox.module.exports(app);await plugin.onload();assert.equal(typeof plugin.processors['home-widgets'],'function');assert.equal(plugin.registry.list().length,12);assert(plugin.commands.some(c=>c.id==='open-home'));
- const definition={type:'test-quote',label:'测试',defaults:{},mount(){}};assert.equal(plugin.api.version,2);assert.throws(()=>plugin.api.registerWidget(definition),/组件来源必须为对象/);assert.throws(()=>plugin.api.registerWidget(definition,{pluginId:'test'}),/pluginId 和 pluginName/);
+ const plugin=new sandbox.module.exports(app);await plugin.onload();assert.equal(typeof plugin.processors['home-widgets'],'function');assert.equal(plugin.registry.list().length,9);assert(plugin.commands.some(c=>c.id==='open-home'));
+ const definition={type:'test-quote',label:'测试',defaults:{},mount(){}};assert.equal(plugin.api.version,3);assert.throws(()=>plugin.api.registerWidget(definition),/组件来源必须为对象/);assert.throws(()=>plugin.api.registerWidget(definition,{pluginId:'test'}),/pluginId 和 pluginName/);
  const source={pluginId:'test-plugin',pluginName:'测试插件'};assert.throws(()=>plugin.api.registerWidget({...definition,unknownField:true},source),/字段不受支持/);
- const remove=plugin.api.registerWidget(definition,source);assert.equal(plugin.api.listWidgetTypes().length,13);remove();assert.equal(plugin.api.listWidgetTypes().length,12);
+ const remove=plugin.api.registerWidget(definition,source);assert.equal(plugin.api.listWidgetTypes().length,10);remove();assert.equal(plugin.api.listWidgetTypes().length,9);
+ const messages=[],handlers={};let children=0,opened;
+ const element={createEl:(tag,options)=>{messages.push(options.text);return {addEventListener:(name,fn)=>{handlers[name]=fn;}};}};
+ const context={sourcePath:'Home/灵感索引.md',addChild:()=>{children++;}};
+ plugin.processors['home-widgets']('{"layout":"Home/ideas.json"}',element,context);assert(messages.some(text=>text.includes('唯一首页布局')));assert.equal(children,0);
+ plugin.openWidget=async id=>{opened=id;};plugin.processors['home-widgets']('{"focus":"ideas"}',element,context);await handlers.click();assert.equal(opened,'ideas');assert.equal(children,0);
  let unloaded=0;plugin.renders.add({unload(){unloaded++;}});plugin.unload();assert.equal(unloaded,1);assert.equal(plugin.renders.size,0);
 });
 
@@ -65,7 +70,7 @@ async function settingsFixture(read){
  let writes=0;plugin.io={read,update:async()=>{writes++;}};
  return {plugin,tab:plugin.settingsTab,dropdowns,texts,buttons,errors,get widths(){return dropdowns.filter(dd=>dd.name==='页面最大宽度');},get writes(){return writes;}};
 }
-const settingsLayout=(patch={})=>JSON.stringify({version:2,theme:'native',maxWidth:'full',widgets:[{id:'banner',type:'banner',title:'Banner',span:12,settings:{}}],...patch});
+const settingsLayout=(patch={})=>JSON.stringify({version:3,theme:'native',maxWidth:'full',widgets:[{id:'banner',type:'banner',title:'Banner',span:12,settings:{}}],...patch});
 const settleSettings=()=>new Promise(resolve=>setImmediate(resolve));
 
 test('opening settings is read-only and keeps component cards inside their tab',async()=>{
@@ -105,19 +110,19 @@ test('bursts of layout notifications serialize reads and stop on settings teardo
  const pending=[];let reads=0;const f=await settingsFixture(()=>{reads++;return new Promise(resolve=>pending.push(resolve));});f.tab.display();
  for(let i=0;i<10;i++){f.plugin.bus.changed('Home/widgets.json');f.plugin.bus.emit('layout:Home/widgets.json');}
  assert.equal(reads,1);pending[0](settingsLayout());await settleSettings();assert.equal(reads,2);
- f.tab.hide();pending[1](settingsLayout());await settleSettings();assert.equal(reads,2);assert.equal(f.plugin.bus.topics.size,0);assert.equal(f.errors.length,0);
+ f.tab.hide();pending[1](settingsLayout());await settleSettings();assert.equal(reads,2);assert.equal(f.plugin.bus.topics.size,0);assert.equal(f.errors.length,0);f.plugin.unload();
 });
 
 test('settings separate builtins from plugin registrations and retain disconnected extension instances',async()=>{
  const widget={id:'calendar-one',type:'my-calendar',title:'我的日历',span:12,settings:{showLunar:true}};
  const f=await settingsFixture(async()=>settingsLayout({widgets:[{id:'banner',type:'banner',title:'Banner',span:12,settings:{}},widget]}));
  const unregister=f.plugin.api.registerWidget({type:'my-calendar',label:'MyCalendar 日历',defaults:{},fields:[],mount(){}},{pluginId:'my-calendar',pluginName:'MyCalendar'});
- assert.equal(f.plugin.registry.source('dataview').kind,'builtin');assert.equal(f.plugin.registry.source('my-calendar').kind,'external');
+ assert.equal(f.plugin.registry.source('tasks').kind,'builtin');assert.equal(f.plugin.registry.source('my-calendar').kind,'external');
  assert.equal(f.plugin.registry.source('my-calendar').pluginName,'MyCalendar');
  f.tab.display();await settleSettings();const root=f.tab.containerEl;
- root.find('hw-set-tab')[1].click();assert(root.find('hw-set-subtab').some(el=>el.textContent==='Dataview 查询'));assert(!root.find('hw-set-subtab').some(el=>el.textContent==='MyCalendar 日历'));
+ root.find('hw-set-tab')[1].click();assert(root.find('hw-set-subtab').some(el=>el.textContent==='分类待办'));assert(!root.find('hw-set-subtab').some(el=>el.textContent==='MyCalendar 日历'));
  root.find('hw-set-tab')[2].click();const external=root.find('hw-set-panel')[2];assert.equal(external.find('hw-set-subtab').length,1);assert.equal(external.find('hw-set-subtab')[0].textContent,'MyCalendar 日历');assert.equal(external.find('hw-set-card').length,1);
- unregister();assert.equal(f.plugin.registry.source('my-calendar'),undefined);assert.equal(external.find('hw-set-card').length,1);assert.equal(external.find('hw-set-warning').length,1);
+ unregister();await settleSettings();assert.equal(f.plugin.registry.source('my-calendar'),undefined);assert.equal(external.find('hw-set-card').length,1);assert.equal(external.find('hw-set-warning').length,1);
  assert.equal(f.writes,0);f.plugin.unload();
 });
 
@@ -141,19 +146,14 @@ test('typography controls persist edits across settings reopening and reset to p
  f.buttons.filter(button=>button.text==='恢复默认排版').at(-1).click();await settleSettings();assert.equal(JSON.parse(saved).typography,undefined);assert.equal(control('正文字号').value,'15');assert.equal(control('正文行距').value,'1.75');assert.equal(control('首页字体').value,'noto-sans-sc');assert.equal(f.errors.length,0);f.plugin.unload();
 });
 
-test('settings can create a default instance beside a customized one and delete a hidden instance only after confirmation',async()=>{
- let saved=settingsLayout({widgets:[{id:'banner',type:'banner',title:'原横幅',span:8,hidden:true,settings:{heading:'自定义标题',image:'custom.png'}}]}),form,writes=0;
- const f=await settingsFixture(async()=>saved);f.plugin.io.update=async(path,fn)=>{saved=fn(saved);writes++;};
- f.tab.display();await settleSettings();
- // Replace only the dialog surface while exercising real buttons and storage.
- f.tab.forms={show:(title,fields,initial,save)=>{form={title,fields,initial,save};},dispose(){}};
- const root=f.tab.containerEl;root.find('hw-set-tab')[1].click();root.find('hw-set-add')[0].click();
- assert.equal(writes,0);assert.equal(form.initial.heading,'HOME');assert.equal(form.initial.image,'Home/assets/home-cozy-banner.png');assert.equal(form.initial.span,12);
- const values=Object.fromEntries(form.fields.map(field=>[field.key,form.initial[field.key]??(field.type==='number'?0:field.type==='checkbox'?false:'')]));
- values.title='新横幅';await form.save(values);await settleSettings();
- const widgets=JSON.parse(saved).widgets;assert.equal(widgets.length,2);assert.notEqual(widgets[0].id,widgets[1].id);assert.equal(widgets[0].settings.heading,'自定义标题');assert.equal(widgets[1].settings.heading,'HOME');
- root.find('hw-set-delete')[0].click();assert.equal(form.title,'删除组件实例');assert.equal(JSON.parse(saved).widgets.length,2);assert.equal(writes,1);
- await form.save({});await settleSettings();assert.deepEqual(JSON.parse(saved).widgets,[widgets[1]]);assert.equal(writes,2);assert.equal(root.find('hw-set-card').length,1);f.plugin.unload();
+test('settings restore the existing singleton and permit creation only after confirmed deletion',async()=>{
+ let saved=settingsLayout({widgets:[{id:'banner',type:'banner',title:'原横幅',span:8,hidden:true,settings:{heading:'自定义标题',image:'custom.png'}}]}),form,writes=0,located;
+ const f=await settingsFixture(async()=>saved);f.plugin.io.update=async(path,fn)=>{saved=fn(saved);writes++;};f.plugin.openWidget=async id=>{located=id;};
+ f.tab.display();await settleSettings();f.tab.forms={show:(title,fields,initial,save)=>{form={title,fields,initial,save};},dispose(){}};
+ const root=f.tab.containerEl;root.find('hw-set-tab')[1].click();assert.equal(root.find('hw-set-add')[0].textContent,'已添加 · 恢复显示');root.find('hw-set-add')[0].click();await settleSettings();
+ assert.equal(writes,0);assert.equal(form.title,'组件已添加');await form.save({});await settleSettings();assert.equal(located,'banner');assert.equal(JSON.parse(saved).widgets.length,1);assert.equal(JSON.parse(saved).widgets[0].settings.heading,'自定义标题');assert.equal(JSON.parse(saved).widgets[0].hidden,false);
+ root.find('hw-set-delete')[0].click();assert.equal(form.title,'删除组件实例');assert.equal(JSON.parse(saved).widgets.length,1);await form.save({});await settleSettings();assert.equal(JSON.parse(saved).widgets.length,0);
+ root.find('hw-set-add')[0].click();await settleSettings();assert.equal(form.initial.heading,'HOME');const values=Object.fromEntries(form.fields.map(field=>[field.key,form.initial[field.key]??(field.type==='number'?0:field.type==='checkbox'?false:'')]));await form.save(values);await settleSettings();assert.equal(JSON.parse(saved).widgets.length,1);assert.equal(JSON.parse(saved).widgets[0].settings.heading,'HOME');f.plugin.unload();
 });
 
 test('settings task deletion offers the default uncategorize choice and applies it only after confirmation',async()=>{
