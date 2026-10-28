@@ -174,6 +174,13 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					const key = fmtDate(cellDate);
 					const evs = map.get(key) ?? [];
 					const important = evs.find((e) => e.important);
+					const addForDay = () => {
+						if (inPreview) {
+							context.notify('预览模式仅展示，请在 Obsidian 中添加日程');
+							return;
+						}
+						openAdd(key);
+					};
 
 					const cell = el(doc, 'div', 'mcw-cell');
 					const week = Math.floor(i / 7);
@@ -190,18 +197,27 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 
 					const top = el(doc, 'div', 'mcw-top');
 					top.append(el(doc, 'span', 'mcw-num', String(cellDate.getDate())));
-					if (showLunar) top.append(el(doc, 'span', 'mcw-lunar', lunarLabel(cellDate)));
+					const meta = el(doc, 'span', 'mcw-meta');
+					if (showLunar) meta.append(el(doc, 'span', 'mcw-lunar', lunarLabel(cellDate)));
 					if (showFestivals) {
 						const badge = dayBadge(cellDate);
-						if (badge) top.append(el(doc, 'span', `mcw-badge mcw-badge-${badge.type}`, badge.text));
+						if (badge) meta.append(el(doc, 'span', `mcw-badge mcw-badge-${badge.type}`, badge.text));
 					}
 					if (showHolidays) {
 						const hol = getHolidayInfo(cellDate);
 						if (hol) {
 							if (hol.type === 'holiday') cell.classList.add('mcw-holiday');
-							top.append(el(doc, 'span', `mcw-hol mcw-hol-${hol.type}`, hol.type === 'holiday' ? '休' : '班'));
+							meta.append(el(doc, 'span', `mcw-hol mcw-hol-${hol.type}`, hol.type === 'holiday' ? '休' : '班'));
 						}
 					}
+					const cellAdd = el(doc, 'button', 'mcw-cell-add', '+');
+					cellAdd.setAttribute('type', 'button');
+					cellAdd.setAttribute('aria-label', `添加 ${key} 的日程`);
+					cellAdd.addEventListener('click', e => {
+						e.stopPropagation();
+						addForDay();
+					});
+					top.append(meta, cellAdd);
 					cell.append(top);
 
 					const chips = el(doc, 'div', 'mcw-chips');
@@ -233,13 +249,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					}
 					cell.append(chips);
 
-					cell.addEventListener('click', () => {
-						if (inPreview) {
-							context.notify('预览模式仅展示，请在 Obsidian 中添加日程');
-							return;
-						}
-						openAdd(key);
-					});
+					cell.addEventListener('click', addForDay);
 					grid.append(cell);
 				}
 				weeks.forEach((spans, week) => {

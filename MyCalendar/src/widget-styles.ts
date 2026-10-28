@@ -14,6 +14,8 @@ export function acquireCalendarWidgetStyles(doc: Document): () => void {
 }
 export const MY_CALENDAR_WIDGET_CSS = `
 .mcw-root {
+	container-type: inline-size;
+	container-name: mcw-calendar;
 	--mcw-festival: #d05a5a;
 	--mcw-today: #e0566b;
 	display: flex;
@@ -131,6 +133,66 @@ export const MY_CALENDAR_WIDGET_CSS = `
 	align-items: center;
 	gap: 3px;
 	min-width: 0;
+}
+
+.mcw-meta {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.mcw-root button.mcw-cell-add {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 16px;
+	width: 16px;
+	min-width: 16px;
+	height: 16px;
+	min-height: 0;
+	margin: 0 0 0 auto;
+	padding: 0;
+	box-sizing: border-box;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: none;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1;
+	color: var(--text-muted);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+
+.mcw-cell:hover .mcw-cell-add,
+.mcw-cell:focus-within .mcw-cell-add {
+	opacity: 1;
+}
+
+.mcw-root button.mcw-cell-add:hover {
+	color: var(--mcw-today);
+	border-color: var(--mcw-today);
+}
+
+.mcw-root button.mcw-cell-add:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+@media (hover: none) {
+	.mcw-root button.mcw-cell-add { opacity: 1; }
+}
+
+@container mcw-calendar (max-width: 420px) {
+	.mcw-top { gap: 0; }
+	.mcw-top .mcw-num { min-width: 14px; width: 14px; height: 14px; line-height: 14px; font-size: 11px; }
+	.mcw-root button.mcw-cell-add { flex-basis: 12px; width: 12px; min-width: 12px; height: 12px; font-size: 11px; }
 }
 
 .mcw-num {
