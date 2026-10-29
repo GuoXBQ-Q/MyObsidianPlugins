@@ -1,7 +1,7 @@
 {
 	"id": "my-calendar",
 	"name": "MyCalendar",
-	"version": "1.4.4",
+	"version": "1.4.5",
 	"minAppVersion": "1.4.0",
 	"description": "日历日程插件：支持日/周/月/日程多种视图、农历与节气节日显示、今日圆圈标注、重要事件单元格高亮、点击日期添加日程。",
 	"author": "GuoXB",
