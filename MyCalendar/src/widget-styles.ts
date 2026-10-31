@@ -1,3 +1,5 @@
+import { MONTH_DRAG_CSS } from './month-drag';
+
 /** MyCalendar Home Widgets 组件样式，挂载时注入一次（scope: .mcw-root） */
 const styleLeases = new WeakMap<Document, { style: HTMLStyleElement; users: number }>();
 export function acquireCalendarWidgetStyles(doc: Document): () => void {
@@ -88,6 +90,7 @@ export const MY_CALENDAR_WIDGET_CSS = `
 	grid-template-rows: repeat(6, minmax(50px, auto));
 	flex: 1;
 	min-height: 0;
+	overflow: auto;
 }
 
 .mcw-cell {
@@ -374,4 +377,7 @@ export const MY_CALENDAR_WIDGET_CSS = `
 	background: var(--background-secondary);
 	justify-content: center;
 }
+
+.mcw-grid [data-event-id] { cursor: default; }
+${MONTH_DRAG_CSS}
 `;

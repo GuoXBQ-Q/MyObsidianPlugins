@@ -2,6 +2,7 @@
 const proto = HTMLElement.prototype as any;
 proto.empty = function () { this.replaceChildren(); };
 proto.addClass = function (...names: string[]) { this.classList.add(...names); };
+proto.removeClass = function (...names: string[]) { this.classList.remove(...names); };
 proto.setText = function (text: string) { this.textContent = text; };
 proto.createEl = function (tag: string, info: any = {}) {
 	const el = document.createElement(tag);
@@ -45,7 +46,15 @@ export class Modal {
 	close() { (this as any).onClose(); this.modalEl.remove(); }
 }
 export class Notice {
-	constructor(message: string) { document.getElementById('notice')!.textContent = message; }
+	private element: HTMLElement;
+	private timeout?: ReturnType<typeof setTimeout>;
+	constructor(message: string | DocumentFragment, duration = 5000) {
+		this.element = document.createElement('span');
+		this.element.append(message);
+		document.getElementById('notice')!.replaceChildren(this.element);
+		if (duration > 0) this.timeout = setTimeout(() => this.hide(), duration);
+	}
+	hide() { if (this.timeout) clearTimeout(this.timeout); this.element.remove(); }
 }
 export function setIcon(el: HTMLElement, name: string) {
 	const paths: Record<string, string> = {

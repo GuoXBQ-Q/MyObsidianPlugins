@@ -9,11 +9,17 @@ import { CountdownSource } from './countdown-source';
 import { createMyCalendarWidget, type HomeWidgetDefinition } from './widget';
 import * as obsidian from 'obsidian';
 import { createPluginUpdater, type PluginUpdater } from '../../shared/plugin-updater';
+import { emptyMonthLayout, normalizeMonthLayout, planMonthDrop, reconcileMonthLayout, refreshAutomaticMonthLayout, type MonthLayoutState } from './month-layout';
+
+interface MonthStoredState { events: CalendarEvent[]; monthLayout: MonthLayoutState; }
+interface MonthMoveUndo { before: MonthStoredState; after: string; expires: number; }
 
 export default class MyCalendarPlugin extends Plugin {
 	updater: PluginUpdater | null = null;
 	settings: MyCalendarSettings = DEFAULT_SETTINGS;
 	events: CalendarEvent[] = [];
+	/** 仅月视图使用的手动顺序和横条行位。 */
+	monthLayout: MonthLayoutState = emptyMonthLayout();
 	/** 从网络获取的年份安排，持久化在 data.json */
 	fetchedHolidays: FetchedArrangement[] = [];
 
@@ -22,6 +28,11 @@ export default class MyCalendarPlugin extends Plugin {
 	homeWidget: HomeWidgetDefinition | null = null;
 	private saveQueue: Promise<void> = Promise.resolve();
 	private savedEvents: CalendarEvent[] = [];
+	private savedMonthSort = DEFAULT_SETTINGS.newEventsAtBottom;
+	private monthUndo: MonthMoveUndo | null = null;
+	private monthUndoTimer: ReturnType<typeof setTimeout> | null = null;
+	private monthUndoNotice: obsidian.Notice | null = null;
+	private monthUndoEnabled = true;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -48,6 +59,8 @@ export default class MyCalendarPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		this.monthUndoEnabled = false;
+		this.clearMonthUndo();
 		const source = this.countdownSource;
 		this.countdownSource = null; this.homeWidget = null; source?.dispose();
 	}
@@ -59,11 +72,14 @@ export default class MyCalendarPlugin extends Plugin {
 			events?: CalendarEvent[];
 			settings?: Partial<MyCalendarSettings>;
 			fetchedHolidays?: FetchedArrangement[];
+			monthLayout?: unknown;
 		} | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings ?? {});
+		this.savedMonthSort = this.settings.newEventsAtBottom;
 		this.events = Array.isArray(data?.events) ? data.events : [];
 		if (this.events.some(event => event.countdown !== undefined && event.countdown !== true)) throw new Error('倒计时关联格式不受支持，请先整理数据');
 		this.savedEvents = JSON.parse(JSON.stringify(this.events));
+		this.monthLayout = normalizeMonthLayout(data?.monthLayout, this.events);
 		this.fetchedHolidays = Array.isArray(data?.fetchedHolidays) ? data.fetchedHolidays : [];
 		setFetchedArrangements(this.fetchedHolidays);
 	}
@@ -100,18 +116,99 @@ export default class MyCalendarPlugin extends Plugin {
 		});
 	}
 
-	private persist(change?: (events: CalendarEvent[]) => CalendarEvent[], customColor?: string): Promise<void> {
+	/** Commit a drag and every affected row together, against the snapshot seen at pointer-down. */
+	async moveMonthEvent(eventId: string, targetDate: string, targetLane: number, expected?: string): Promise<boolean> {
+		let changed = false;
+		let before: MonthStoredState | null = null;
+		await this.persist((events, layout) => {
+			if (expected !== undefined && expected !== JSON.stringify({ events, layout })) throw new Error('日程已变化，请重新拖动');
+			const plan = planMonthDrop(events, layout, this.settings.newEventsAtBottom, eventId, targetDate, targetLane);
+			if (!plan.valid) throw new Error(plan.reason ?? '此位置不可用');
+			if (!plan.changed) return null;
+			changed = true;
+			before = JSON.parse(JSON.stringify({ events, monthLayout: layout }));
+			return { events: plan.events, monthLayout: plan.layout };
+		}, undefined, () => {
+			if (before) this.offerMonthUndo(before);
+		});
+		return changed;
+	}
+
+	/** The latest move is the only undo opportunity; never overwrite subsequent edits. */
+	async undoMonthMove(): Promise<boolean> {
+		const undo = this.monthUndo;
+		if (!undo) return false;
+		let restored = false;
+		await this.persist((events, layout) => {
+			if (this.monthUndo !== undo) return null;
+			if (Date.now() >= undo.expires) { this.clearMonthUndo(); return null; }
+			if (undo.after !== JSON.stringify({ events, layout })) {
+				this.clearMonthUndo();
+				throw new Error('日程已再次变化，无法撤销本次移动');
+			}
+			restored = true;
+			return JSON.parse(JSON.stringify(undo.before));
+		}, undefined, () => { if (this.monthUndo === undo) this.clearMonthUndo(); });
+		return restored;
+	}
+
+	private clearMonthUndo(): void {
+		this.monthUndo = null;
+		if (this.monthUndoTimer !== null) clearTimeout(this.monthUndoTimer);
+		this.monthUndoTimer = null;
+		this.monthUndoNotice?.hide?.();
+		this.monthUndoNotice = null;
+	}
+
+	private offerMonthUndo(before: MonthStoredState): void {
+		if (!this.monthUndoEnabled) return;
+		this.clearMonthUndo();
+		const undo: MonthMoveUndo = { before, after: JSON.stringify({ events: this.events, layout: this.monthLayout }), expires: Date.now() + 10_000 };
+		this.monthUndo = undo;
+		this.monthUndoTimer = setTimeout(() => { if (this.monthUndo === undo) this.clearMonthUndo(); }, 10_000);
+		try {
+			if (typeof document === 'undefined') { this.monthUndoNotice = new obsidian.Notice('日程已移动，可在 10 秒内撤销', 10_000); return; }
+			const fragment = document.createDocumentFragment();
+			fragment.append(document.createTextNode('日程已移动 '));
+			const button = document.createElement('button');
+			button.textContent = '撤销'; button.type = 'button';
+			button.addEventListener('click', () => {
+				button.disabled = true;
+				void this.undoMonthMove().catch(error => {
+					button.disabled = false;
+					new obsidian.Notice(error instanceof Error ? error.message : '撤销失败，请重试');
+				});
+			});
+			fragment.append(button);
+			this.monthUndoNotice = new obsidian.Notice(fragment, 10_000);
+		} catch (error) { console.error('[MyCalendar] 日程已保存，撤销提示显示失败', error); }
+	}
+
+	private persist(change?: (events: CalendarEvent[], layout: MonthLayoutState) => CalendarEvent[] | MonthStoredState | null, customColor?: string, onCommitted?: () => void): Promise<void> {
 		const job = this.saveQueue.catch(() => {}).then(async () => {
 			const previous = this.savedEvents;
 			const settings = { ...this.settings };
+			const result = change?.(this.events, this.monthLayout);
+			if (result === null) return;
+			const events = Array.isArray(result) ? result : result?.events ?? this.events;
+			let monthLayout = Array.isArray(result)
+				? reconcileMonthLayout(this.events, events, this.monthLayout, settings.newEventsAtBottom)
+				: result?.monthLayout ?? this.monthLayout;
+			const sortChanged = settings.newEventsAtBottom !== this.savedMonthSort;
+			if (sortChanged) monthLayout = refreshAutomaticMonthLayout(events, monthLayout, settings.newEventsAtBottom);
 			if (customColor) settings.customColors = [...new Set([customColor, ...settings.customColors])].slice(0, 12);
 			const snapshot = JSON.parse(JSON.stringify({
-				events: change ? change(this.events) : this.events, settings, fetchedHolidays: this.fetchedHolidays,
+				events, monthLayout, settings, fetchedHolidays: this.fetchedHolidays,
 			}));
 			await this.saveData(snapshot);
 			if (change) this.events = snapshot.events;
+			this.monthLayout = snapshot.monthLayout;
+			this.savedMonthSort = snapshot.settings.newEventsAtBottom;
+			if (sortChanged) this.clearMonthUndo();
 			if (customColor) this.settings.customColors = snapshot.settings.customColors;
 			this.savedEvents = snapshot.events;
+			try { onCommitted?.(); }
+			catch (error) { console.error('[MyCalendar] 日程已保存，保存后回调失败', error); }
 			const relevant = (events: CalendarEvent[]) => JSON.stringify(events.filter(event => event.countdown).map(event => [event.id, event.title, event.date]));
 			if (relevant(previous) !== relevant(this.savedEvents)) this.countdownSource?.changed();
 			try { this.refreshViews(); }

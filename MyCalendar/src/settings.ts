@@ -104,7 +104,7 @@ export class MyCalendarSettingTab extends PluginSettingTab {
 
 		new Setting(view)
 			.setName('新日程显示在下方')
-			.setDesc('开启后，同一天的日程按添加顺序排列；关闭后按开始时间、标题排序。适用于月历、首页组件、全天/跨天栏和日程列表；时间轴仍按实际时间定位。')
+			.setDesc('开启后按添加顺序排列；关闭后按开始时间、标题排序。月历中手动调整过的日期优先使用手动顺序；全天/跨天栏和日程列表仍按此设置排列，时间轴按实际时间定位。')
 			.addToggle((t) =>
 				t.setValue(this.plugin.settings.newEventsAtBottom).onChange(async (v) => {
 					this.plugin.settings.newEventsAtBottom = v;

@@ -175,6 +175,25 @@
 
 /* ---------- 月视图 ---------- */
 
+.mc-month-grid [data-event-id] { cursor: default; }
+.mc-month-drag-active { user-select: none; }
+.mc-month-drag-active, .mc-month-drag-active * { cursor: grabbing !important; }
+.mc-month-previewing [data-event-id], .mc-month-previewing .mc-more, .mc-month-previewing .mcw-more { visibility: hidden; }
+.mc-month-drag-layer { position: fixed; inset: 0; pointer-events: none; z-index: 10000; color: var(--text-normal); font: 12px/1.5 var(--font-interface, sans-serif); }
+.mc-month-drag-board { position: fixed; overflow: hidden; pointer-events: none; }
+.mc-month-drag-ghost { position: fixed; display: flex; flex-direction: column; gap: 3px; max-width: 240px; padding: 8px 11px; border: 1px solid var(--interactive-accent); border-radius: 8px; background: var(--background-primary); box-shadow: 0 5px 20px #0003; }
+.mc-month-drag-ghost strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-month-drag-ghost span { font-size: 11px; color: var(--text-muted); }
+.mc-month-drag-order { display: flex; flex-direction: column; max-height: 140px; overflow: hidden; border-top: 1px solid var(--background-modifier-border); padding-top: 3px; }
+.mc-month-drag-order span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-month-drag-ghost.is-invalid { border-color: var(--text-error, #d74b4b); }
+.mc-month-drag-ghost.is-invalid span { color: var(--text-error, #d74b4b); }
+.mc-month-drag-preview-card, .mc-month-drag-preview-more { position: absolute; box-sizing: border-box; pointer-events: none; }
+.mc-month-drag-preview-card.is-dragged { outline: 1px dashed var(--interactive-accent); outline-offset: -1px; }
+.mc-month-drag-marker { position: absolute; height: 3px; border-radius: 2px; background: var(--interactive-accent); box-shadow: 0 0 0 1px var(--background-primary); }
+.mc-month-drag-marker.is-invalid { background: var(--text-error, #d74b4b); }
+.mc-month-drag-nav-hover { outline: 2px solid var(--interactive-accent) !important; outline-offset: 2px; background: var(--background-modifier-hover) !important; }
+
 .mc-weekdays {
 	display: grid;
 	flex-shrink: 0;

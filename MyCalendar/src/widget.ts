@@ -14,8 +14,10 @@ import {
 	weekdayLabels,
 } from './utils';
 import { acquireCalendarWidgetStyles } from './widget-styles';
-import { eventDescription, freeDayLanes, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount } from './event-range';
+import { eventDescription, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount } from './event-range';
 import { createCompletionToggle } from './event-completion';
+import { monthEventLanes } from './month-layout';
+import { MonthDragController } from './month-drag';
 
 /**
  * 注册到 Home Widgets 宿主的组件定义。
@@ -108,6 +110,8 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			const prevBtn = el(doc, 'button', 'mcw-btn', '‹');
 			const todayBtn = el(doc, 'button', 'mcw-btn', '本月');
 			const nextBtn = el(doc, 'button', 'mcw-btn', '›');
+			prevBtn.dataset.monthNav = 'previous'; nextBtn.dataset.monthNav = 'next';
+			prevBtn.setAttribute('aria-label', '上个月'); nextBtn.setAttribute('aria-label', '下个月');
 			for (const b of [prevBtn, todayBtn, nextBtn]) b.setAttribute('type', 'button');
 			// 新建日程按钮放在月份切换右侧，与原始插件头部布局一致
 			const addBtn = el(doc, 'button', 'mcw-btn', '＋ 日程');
@@ -155,6 +159,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				return chip;
 			};
 
+			let monthDrag: MonthDragController | null = null;
 			const rerender = (): void => {
 				title.textContent = `${cursor.y} 年 ${cursor.m} 月`;
 				weekdaysEl.replaceChildren(
@@ -167,6 +172,8 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				const gridStart = addDays(first, -(first.getDay() - weekStartIdx + 7) % 7);
 				const map = indexEvents(plugin.events, gridStart, 42, plugin.settings.newEventsAtBottom);
 				const weeks = monthRangeSegments(plugin.events, gridStart, 42, plugin.settings.newEventsAtBottom);
+				const lanes = monthEventLanes(plugin.events, plugin.monthLayout ?? { version: 1, manualDates: [], lanes: {} }, plugin.settings.newEventsAtBottom);
+				for (const spans of weeks) for (const span of spans) span.lane = lanes.get(span.ev.id) ?? span.lane;
 
 				grid.replaceChildren();
 				for (let i = 0; i < 42; i++) {
@@ -183,6 +190,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					};
 
 					const cell = el(doc, 'div', 'mcw-cell');
+					cell.dataset.date = key;
 					const week = Math.floor(i / 7);
 					cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
 					if (cellDate.getMonth() !== cursor.m - 1) cell.classList.add('mcw-other');
@@ -221,10 +229,13 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					cell.append(top);
 
 					const chips = el(doc, 'div', 'mcw-chips');
-					const singles = evs.filter(ev => !isMultiDay(ev));
+					const singles = evs.filter(ev => !isMultiDay(ev)).sort((a, b) => (lanes.get(a.id) ?? 0) - (lanes.get(b.id) ?? 0));
 					const visible = singles.slice(0, 2);
-					const slots = freeDayLanes(weeks[week], i % 7, visible.length + Number(singles.length > 2));
-					const rows = Math.max(rangeLaneCount(weeks[week], i % 7), ...slots.map(lane => lane + 1));
+					const slots = visible.map(ev => lanes.get(ev.id) ?? 0);
+					const occupied = new Set([...slots, ...weeks[week].filter(span => span.start <= i % 7 && span.end >= i % 7).map(span => span.lane)]);
+					let moreLane = 0;
+					while (occupied.has(moreLane)) moreLane++;
+					const rows = Math.max(rangeLaneCount(weeks[week], i % 7), ...slots.map(lane => lane + 1), singles.length > 2 ? moreLane + 1 : 0);
 					chips.style.minHeight = `${Math.max(0, rows * 18 - 2)}px`;
 					cell.style.minHeight = `${Math.max(50, 28 + rows * 18)}px`;
 					for (const [index, ev] of visible.entries()) {
@@ -235,8 +246,8 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 					}
 					if (singles.length > 2) {
 						const more = el(doc, 'div', 'mcw-chip mcw-more', `还有 ${singles.length - 2} 项…`);
-						more.style.gridRow = String(slots[visible.length] + 1);
-						more.dataset.eventLane = String(slots[visible.length]);
+						more.style.gridRow = String(moreLane + 1);
+						more.dataset.eventLane = String(moreLane);
 						more.addEventListener('click', (e) => {
 							e.stopPropagation();
 							if (inPreview) {
@@ -259,26 +270,31 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 						placeRangeBar(bar, span, week + 1, 24, 18); grid.append(bar);
 					}
 				});
+				monthDrag?.setSurface({
+					grid, previous: prevBtn, next: nextBtn, shiftMonth,
+					cellSelector: '.mcw-cell', chipsSelector: '.mcw-chips', top: 24, step: 18, visibleSingles: 2,
+					createChip: chipEl,
+				});
 			};
 
-			prevBtn.addEventListener('click', () => {
-				const r = addMonths(cursor.y, cursor.m, -1);
+			const shiftMonth = (delta: number): void => {
+				const r = addMonths(cursor.y, cursor.m, delta);
 				cursor.y = r.y;
 				cursor.m = r.m;
 				rerender();
-			});
-			nextBtn.addEventListener('click', () => {
-				const r = addMonths(cursor.y, cursor.m, 1);
-				cursor.y = r.y;
-				cursor.m = r.m;
-				rerender();
-			});
+			};
+			prevBtn.addEventListener('click', () => shiftMonth(-1));
+			nextBtn.addEventListener('click', () => shiftMonth(1));
 			todayBtn.addEventListener('click', () => {
 				const t = new Date();
 				cursor.y = t.getFullYear();
 				cursor.m = t.getMonth() + 1;
 				rerender();
 			});
+			if (!inPreview) {
+				monthDrag = new MonthDragController(root, plugin, message => context.notify(message, true));
+				lifetime.own(() => monthDrag?.dispose());
+			}
 
 			// 日程数据变化时跟着刷新（插件保存数据后会通知所有刷新目标）
 			lifetime.own(plugin.onRefresh(rerender));

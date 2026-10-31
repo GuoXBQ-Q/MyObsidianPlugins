@@ -1,13 +1,20 @@
 import { CalendarView } from '../src/calendar-view';
 import { createMyCalendarWidget } from '../src/widget';
 import { CalendarEvent, DEFAULT_SETTINGS } from '../src/types';
+import { Notice } from 'obsidian';
+import { emptyMonthLayout, normalizeMonthLayout, planMonthDrop, reconcileMonthLayout } from '../src/month-layout';
 
 const event = (id: string, title: string, date: string, endDate?: string, color = 'blue'): CalendarEvent => ({ id, title, date, endDate, color, createdAt: 0, note: '预览示例，真实日程未被读取或修改' });
 const callbacks = new Set<() => void>();
 let completionError: string | null = null;
+let moveError: string | null = null;
+let moveCount = 0;
+let undo: { events: CalendarEvent[]; layout: ReturnType<typeof emptyMonthLayout>; expected: string; expires: number } | null = null;
+let moveNotice: Notice | null = null;
 const plugin = {
 	isCountdownAvailable: () => false,
 	app: {}, settings: { ...DEFAULT_SETTINGS },
+	monthLayout: emptyMonthLayout(),
 	events: [event('tianjin', '天津 · 会议活动', '2026-11-06', '2026-11-09'), event('prep', '会前准备', '2026-11-07', '2026-11-08', 'purple'), event('month', '跨月出差', '2026-10-30', '2026-11-03', 'teal'), { ...event('single', '项目同步', '2026-11-06'), startTime: '10:00', endTime: '11:00' }],
 	onRefresh(callback: () => void) { callbacks.add(callback); return () => callbacks.delete(callback); },
 	async saveAll() { view.rerender(); for (const callback of callbacks) callback(); },
@@ -18,10 +25,40 @@ const plugin = {
 	},
 	async saveEvent(value: CalendarEvent, existing: CalendarEvent | null) {
 		const copy = JSON.parse(JSON.stringify(value));
-		this.events = existing ? this.events.map(event => event.id === value.id ? copy : event) : [...this.events, copy];
+		const next = existing ? this.events.map(event => event.id === value.id ? copy : event) : [...this.events, copy];
+		this.monthLayout = reconcileMonthLayout(this.events, next, this.monthLayout, this.settings.newEventsAtBottom);
+		this.events = next;
 		await this.saveAll();
 	},
-	async deleteEvent(value: CalendarEvent) { this.events = this.events.filter(event => event.id !== value.id); await this.saveAll(); },
+	async deleteEvent(value: CalendarEvent) {
+		const next = this.events.filter(event => event.id !== value.id);
+		this.monthLayout = reconcileMonthLayout(this.events, next, this.monthLayout, this.settings.newEventsAtBottom);
+		this.events = next; await this.saveAll();
+	},
+	async moveMonthEvent(id: string, date: string, lane: number, expected?: string): Promise<boolean> {
+		if (moveError) throw new Error(moveError);
+		if (expected && expected !== JSON.stringify({ events: this.events, layout: this.monthLayout })) throw new Error('日程已变化，请重新拖动');
+		const plan = planMonthDrop(this.events, this.monthLayout, this.settings.newEventsAtBottom, id, date, lane);
+		if (!plan.valid) throw new Error(plan.reason);
+		if (!plan.changed) return false;
+		const previous = JSON.parse(JSON.stringify({ events: this.events, layout: this.monthLayout }));
+		this.events = plan.events; this.monthLayout = plan.layout; moveCount++;
+		undo = { ...previous, expected: JSON.stringify({ events: this.events, layout: this.monthLayout }), expires: Date.now() + 10000 };
+		await this.saveAll();
+		moveNotice?.hide();
+		const message = document.createDocumentFragment();
+		message.append('日程已移动 ');
+		const button = document.createElement('button'); button.textContent = '撤销';
+		button.addEventListener('click', () => { void this.undoMonthMove().catch(error => new Notice(error.message)); });
+		message.append(button); moveNotice = new Notice(message, 10000);
+		return true;
+	},
+	async undoMonthMove(): Promise<boolean> {
+		if (!undo || Date.now() > undo.expires) return false;
+		if (undo.expected !== JSON.stringify({ events: this.events, layout: this.monthLayout })) throw new Error('日程已变化，无法撤销');
+		this.events = undo.events; this.monthLayout = undo.layout; undo = null;
+		moveNotice?.hide(); await this.saveAll(); return true;
+	},
 	openDayView(key: string) { view.jumpTo(new Date(key + 'T00:00:00'), 'day'); },
 };
 const view = new CalendarView({ app: plugin.app } as any, plugin as any);
@@ -38,12 +75,17 @@ void createMyCalendarWidget(plugin as any).mount({
 
 // Isolated browser regression fixtures; never read or write vault data.
 (window as any).calendarRangePreview = {
-	setEvents(events: CalendarEvent[]) { plugin.events = events; void plugin.saveAll(); },
+	setEvents(events: CalendarEvent[]) { plugin.events = events; plugin.monthLayout = emptyMonthLayout(); undo = null; moveCount = 0; moveError = null; moveNotice?.hide(); void plugin.saveAll(); },
 	show(date: string, mode: 'month' | 'week' | 'day' | 'agenda') { view.jumpTo(new Date(date + 'T12:00:00'), mode); },
 	setWeekStart(value: 'monday' | 'sunday') { plugin.settings.weekStart = value; void plugin.saveAll(); },
 	setMonth(y: number, m: number) { widgetLocal.cursor.y = y; widgetLocal.cursor.m = m; view.jumpTo(new Date(y, m - 1, 6), 'month'); void plugin.saveAll(); },
 	setNewEventsAtBottom(value: boolean) { plugin.settings.newEventsAtBottom = value; void plugin.saveAll(); },
 	getEvents() { return JSON.parse(JSON.stringify(plugin.events)); },
+	getMonthLayout() { return JSON.parse(JSON.stringify(plugin.monthLayout)); },
+	setMonthLayout(value: unknown) { plugin.monthLayout = normalizeMonthLayout(value, plugin.events); void plugin.saveAll(); },
+	getMoveCount() { return moveCount; },
+	setMoveError(message: string | null) { moveError = message; },
+	undoMonthMove() { return plugin.undoMonthMove(); },
 	setCompletionError(message: string | null) { completionError = message; },
 };
 document.getElementById('theme')!.addEventListener('click', () => { document.body.classList.toggle('theme-dark'); document.body.classList.toggle('theme-light'); });

@@ -5,7 +5,9 @@ import { EventModal } from './event-modal';
 import { createCompletionToggle } from './event-completion';
 import { getHolidayInfo } from './holidays';
 import { dayBadge, lunarFullText, lunarLabel } from './lunar';
-import { compareEvents, eventDescription, eventEndDate, freeDayLanes, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
+import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
+import { monthEventLanes } from './month-layout';
+import { MonthDragController } from './month-drag';
 import {
 	addDays,
 	addMonths,
@@ -42,6 +44,7 @@ export class CalendarView extends ItemView {
 	private todayBtn!: HTMLButtonElement;
 	private bodyEl!: HTMLElement;
 	private switcherEl!: HTMLElement;
+	private monthDrag: MonthDragController | null = null;
 
 	constructor(leaf: WorkspaceLeaf, private plugin: MyCalendarPlugin) {
 		super(leaf);
@@ -71,16 +74,22 @@ export class CalendarView extends ItemView {
 		const root = this.contentEl;
 		root.empty();
 		root.addClass('my-calendar-view');
+		this.monthDrag?.dispose();
+		this.monthDrag = new MonthDragController(root, this.plugin, message => new Notice(message));
 
 		// 顶部：日期、视图切换和导航共用一行。
 		const header = root.createDiv('mc-header');
 		this.mcTitle = header.createDiv('mc-title');
 		const nav = header.createDiv('mc-nav');
 		this.prevBtn = nav.createEl('button', { cls: 'mc-btn mc-nav-arrow', text: '‹' });
+		this.prevBtn.dataset.monthNav = 'previous';
+		this.prevBtn.setAttribute('aria-label', '上个月');
 		this.prevBtn.addEventListener('click', () => this.shift(-1));
 		this.todayBtn = nav.createEl('button', { cls: 'mc-btn', text: '本月' });
 		this.todayBtn.addEventListener('click', () => this.goToday());
 		this.nextBtn = nav.createEl('button', { cls: 'mc-btn mc-nav-arrow', text: '›' });
+		this.nextBtn.dataset.monthNav = 'next';
+		this.nextBtn.setAttribute('aria-label', '下个月');
 		this.nextBtn.addEventListener('click', () => this.shift(1));
 
 		const addBtn = nav.createEl('button', { cls: 'mc-btn mc-btn-accent' });
@@ -110,6 +119,8 @@ export class CalendarView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		this.monthDrag?.dispose();
+		this.monthDrag = null;
 		this.contentEl.empty();
 	}
 
@@ -186,6 +197,7 @@ export class CalendarView extends ItemView {
 		this.renderHeader();
 		this.renderSwitcherState();
 		const body = this.bodyEl;
+		if (this.state.mode !== 'month') this.monthDrag?.setSurface(null);
 		body.empty();
 		switch (this.state.mode) {
 			case 'month':
@@ -267,6 +279,8 @@ export class CalendarView extends ItemView {
 		const gridStart = addDays(first, -offset);
 		const map = this.eventsByDate(gridStart, 42);
 		const weeks = monthRangeSegments(this.plugin.events, gridStart, 42, settings.newEventsAtBottom);
+		const lanes = monthEventLanes(this.plugin.events, this.plugin.monthLayout ?? { version: 1, manualDates: [], lanes: {} }, settings.newEventsAtBottom);
+		for (const spans of weeks) for (const span of spans) span.lane = lanes.get(span.ev.id) ?? span.lane;
 
 		const labels = weekdayLabels(settings.weekStart);
 		const wd = container.createDiv('mc-weekdays');
@@ -281,6 +295,7 @@ export class CalendarView extends ItemView {
 			const important = evs.find((e) => e.important);
 
 			const cell = grid.createDiv('mc-cell');
+			cell.dataset.date = key;
 			const week = Math.floor(i / 7);
 			cell.style.gridRow = String(week + 1); cell.style.gridColumn = String(i % 7 + 1);
 			if (!inMonth) cell.addClass('mc-other-month');
@@ -317,11 +332,14 @@ export class CalendarView extends ItemView {
 			});
 
 			const chips = cell.createDiv('mc-chips');
-			const singles = evs.filter(ev => !isMultiDay(ev));
+			const singles = evs.filter(ev => !isMultiDay(ev)).sort((a, b) => (lanes.get(a.id) ?? 0) - (lanes.get(b.id) ?? 0));
 			const maxChips = 3;
 			const visible = singles.slice(0, maxChips);
-			const slots = freeDayLanes(weeks[week], i % 7, visible.length + (singles.length > maxChips ? 1 : 0));
-			const rows = Math.max(rangeLaneCount(weeks[week], i % 7), (slots[slots.length - 1] ?? -1) + 1);
+			const slots = visible.map(ev => lanes.get(ev.id) ?? 0);
+			const occupied = new Set([...slots, ...weeks[week].filter(span => span.start <= i % 7 && span.end >= i % 7).map(span => span.lane)]);
+			let moreLane = 0;
+			while (occupied.has(moreLane)) moreLane++;
+			const rows = Math.max(rangeLaneCount(weeks[week], i % 7), ...slots.map(lane => lane + 1), singles.length > maxChips ? moreLane + 1 : 0);
 			chips.style.minHeight = `${Math.max(0, rows * 22 - 2)}px`;
 			for (const [index, ev] of visible.entries()) {
 				const chip = this.chipEl(ev);
@@ -331,8 +349,8 @@ export class CalendarView extends ItemView {
 			}
 			if (singles.length > maxChips) {
 				const more = chips.createDiv({ cls: 'mc-chip mc-more', text: `还有 ${singles.length - maxChips} 项…` });
-				more.style.gridRow = String(slots[visible.length] + 1);
-				more.dataset.eventLane = String(slots[visible.length]);
+				more.style.gridRow = String(moreLane + 1);
+				more.dataset.eventLane = String(moreLane);
 				more.addEventListener('click', (e) => {
 					e.stopPropagation();
 					this.jumpTo(cellDate, 'day');
@@ -347,6 +365,11 @@ export class CalendarView extends ItemView {
 				bar.dataset.eventLane = String(span.lane);
 				placeRangeBar(bar, span, week + 1, 30, 22); grid.append(bar);
 			}
+		});
+		this.monthDrag?.setSurface({
+			grid, previous: this.prevBtn, next: this.nextBtn, shiftMonth: delta => this.shift(delta),
+			cellSelector: '.mc-cell', chipsSelector: '.mc-chips', top: 30, step: 22, visibleSingles: 3,
+			createChip: event => this.chipEl(event),
 		});
 	}
 
