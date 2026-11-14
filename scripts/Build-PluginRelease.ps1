@@ -56,13 +56,19 @@ try {
         } finally { $zip.Dispose() }
         $plugins += [ordered]@{ id = $id; version = $manifest.version; minAppVersion = $manifest.minAppVersion; asset = "$id.zip" }
     }
-    @(
+    $notesPath = Join-Path $repoRoot ".github/release-notes/$Tag.md"
+    $notes = if (Test-Path -LiteralPath $notesPath) {
+        (Get-Content -LiteralPath $notesPath -Raw -Encoding UTF8).TrimEnd()
+    } else {
         "Plugin builds: $Tag"
         "Source commit: $($commit.Trim())"
         ''
         ($plugins | ForEach-Object { "- $($_.id): $($_.version)" })
         ''
         'Each ZIP contains main.js, manifest.json and styles.css at its root.'
+    }
+    @(
+        $notes
         ''
         '<!-- obsidian-plugin-updates:v1 -->'
         '```json'

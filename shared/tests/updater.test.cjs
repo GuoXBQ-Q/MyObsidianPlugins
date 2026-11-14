@@ -117,6 +117,9 @@ test('installer refuses to overwrite an externally installed newer version', asy
 });
 test('CI version gate allows unchanged packages and rejects changed same-version files or a downgrade',()=>{
   const old = pluginFiles(); validateUpgrade(old,pluginFiles(),'home-widgets'); validateUpgrade(old,pluginFiles('home-widgets','0.3.0'),'home-widgets');
+  const lf = {...old, 'main.js':Buffer.from('run();\n'), 'styles.css':Buffer.from('body {}\n')};
+  const crlf = {...old, 'main.js':Buffer.from('run();\r\n'), 'styles.css':Buffer.from('body {}\r\n')};
+  validateUpgrade(lf, crlf, 'home-widgets');
   assert.throws(()=>validateUpgrade(old,{...old,'main.js':Buffer.from('changed')},'home-widgets'),/without a version increase/);
   assert.throws(()=>validateUpgrade(old,pluginFiles('home-widgets','0.1.0'),'home-widgets'),/decrease/);
 });

@@ -9,7 +9,9 @@ function validateUpgrade(previous, current, id) {
   if (before.id !== id || after.id !== id) throw new Error('Plugin ID mismatch: ' + id);
   const comparison = compareVersions(after.version, before.version);
   if (comparison < 0) throw new Error('Plugin version must not decrease: ' + id);
-  const changed = FILES.some(name => !Buffer.from(previous[name]).equals(Buffer.from(current[name])));
+  // Checkout settings can change the line endings of the packaged text files.
+  const normalizeLineEndings = file => Buffer.from(file).toString('utf8').replace(/\r\n/g, '\n');
+  const changed = FILES.some(name => normalizeLineEndings(previous[name]) !== normalizeLineEndings(current[name]));
   if (changed && comparison === 0) throw new Error(`Runtime files changed without a version increase: ${id} ${after.version}`);
 }
 async function checkRelease(directory) {
