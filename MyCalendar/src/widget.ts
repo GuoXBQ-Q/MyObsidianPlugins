@@ -18,6 +18,7 @@ import { eventDescription, indexEvents, isMultiDay, monthRangeSegments, placeRan
 import { createCompletionToggle } from './event-completion';
 import { monthEventLanes } from './month-layout';
 import { MonthDragController } from './month-drag';
+import { watchLocalDateChange } from './date-rollover';
 
 /**
  * 注册到 Home Widgets 宿主的组件定义。
@@ -99,6 +100,8 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 				local.cursor = { y: now.getFullYear(), m: now.getMonth() + 1 };
 			}
 			const cursor = local.cursor as { y: number; m: number };
+			if (typeof local.followToday !== 'boolean') local.followToday = cursor.y === now.getFullYear() && cursor.m === now.getMonth() + 1;
+			if (local.followToday) { cursor.y = now.getFullYear(); cursor.m = now.getMonth() + 1; }
 
 			const openAdd = (dateKey: string) => new EventModal(plugin.app, plugin, null, dateKey).open();
 			const openEdit = (ev: CalendarEvent) => new EventModal(plugin.app, plugin, ev, ev.date).open();
@@ -278,6 +281,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			};
 
 			const shiftMonth = (delta: number): void => {
+				local.followToday = false;
 				const r = addMonths(cursor.y, cursor.m, delta);
 				cursor.y = r.y;
 				cursor.m = r.m;
@@ -286,6 +290,7 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			prevBtn.addEventListener('click', () => shiftMonth(-1));
 			nextBtn.addEventListener('click', () => shiftMonth(1));
 			todayBtn.addEventListener('click', () => {
+				local.followToday = true;
 				const t = new Date();
 				cursor.y = t.getFullYear();
 				cursor.m = t.getMonth() + 1;
@@ -300,6 +305,11 @@ export function createMyCalendarWidget(plugin: MyCalendarPlugin): HomeWidgetDefi
 			lifetime.own(plugin.onRefresh(rerender));
 
 			rerender();
+			lifetime.own(watchLocalDateChange(root, current => {
+				if (monthDrag?.isInteracting) return false;
+				if (local.followToday) { cursor.y = current.getFullYear(); cursor.m = current.getMonth() + 1; }
+				rerender();
+			}));
 		},
 	};
 }

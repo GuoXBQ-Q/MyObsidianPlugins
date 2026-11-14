@@ -45,6 +45,8 @@ export class MonthDragController {
 	private disposed = false;
 	private win: Window;
 
+	get isInteracting(): boolean { return this.session !== null; }
+
 	constructor(private root: HTMLElement, private plugin: MyCalendarPlugin, private notify: (message: string) => void) {
 		this.win = root.ownerDocument.defaultView!;
 		root.addEventListener('pointerdown', this.pointerDown, true);

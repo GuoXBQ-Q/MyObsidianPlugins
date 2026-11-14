@@ -8,6 +8,7 @@ import { dayBadge, lunarFullText, lunarLabel } from './lunar';
 import { compareEvents, eventDescription, eventEndDate, indexEvents, isMultiDay, monthRangeSegments, placeRangeBar, rangeLaneCount, rangeSegments } from './event-range';
 import { monthEventLanes } from './month-layout';
 import { MonthDragController } from './month-drag';
+import { watchLocalDateChange } from './date-rollover';
 import {
 	addDays,
 	addMonths,
@@ -45,6 +46,8 @@ export class CalendarView extends ItemView {
 	private bodyEl!: HTMLElement;
 	private switcherEl!: HTMLElement;
 	private monthDrag: MonthDragController | null = null;
+	private followToday = true;
+	private stopDateWatcher: (() => void) | null = null;
 
 	constructor(leaf: WorkspaceLeaf, private plugin: MyCalendarPlugin) {
 		super(leaf);
@@ -71,6 +74,9 @@ export class CalendarView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		this.stopDateWatcher?.();
+		this.stopDateWatcher = null;
+		if (this.followToday) this.anchorTo(new Date());
 		const root = this.contentEl;
 		root.empty();
 		root.addClass('my-calendar-view');
@@ -116,9 +122,16 @@ export class CalendarView extends ItemView {
 		this.bodyEl = root.createDiv('mc-body');
 
 		this.rerender();
+		this.stopDateWatcher = watchLocalDateChange(root, now => {
+			if (this.monthDrag?.isInteracting) return false;
+			if (this.followToday) this.anchorTo(now);
+			this.rerender();
+		});
 	}
 
 	async onClose(): Promise<void> {
+		this.stopDateWatcher?.();
+		this.stopDateWatcher = null;
 		this.monthDrag?.dispose();
 		this.monthDrag = null;
 		this.contentEl.empty();
@@ -129,8 +142,10 @@ export class CalendarView extends ItemView {
 	private setMode(mode: ViewMode): void {
 		if (mode === this.state.mode) return;
 		const s = { ...this.state, mode };
-		// 从月视图切到周/日视图时，把锚定日限制在当月内，避免 31 号溢出
-		if (this.state.mode === 'month' && (mode === 'week' || mode === 'day')) {
+		if (this.followToday) {
+			const now = new Date();
+			s.y = now.getFullYear(); s.m = now.getMonth() + 1; s.d = now.getDate();
+		} else if (this.state.mode === 'month' && (mode === 'week' || mode === 'day')) {
 			s.d = Math.min(s.d, daysInMonth(s.y, s.m));
 		}
 		this.state = s;
@@ -151,16 +166,22 @@ export class CalendarView extends ItemView {
 		} else {
 			return;
 		}
+		this.followToday = false;
 		this.rerender();
 	}
 
+	private anchorTo(date: Date): void {
+		this.state = { ...this.state, y: date.getFullYear(), m: date.getMonth() + 1, d: date.getDate() };
+	}
+
 	private goToday(): void {
-		const t = new Date();
-		this.state = { ...this.state, y: t.getFullYear(), m: t.getMonth() + 1, d: t.getDate() };
+		this.followToday = true;
+		this.anchorTo(new Date());
 		this.rerender();
 	}
 
 	jumpTo(date: Date, mode: ViewMode): void {
+		this.followToday = fmtDate(date) === todayKey();
 		this.state = {
 			mode,
 			y: date.getFullYear(),

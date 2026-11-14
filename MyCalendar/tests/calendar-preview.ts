@@ -9,6 +9,7 @@ const callbacks = new Set<() => void>();
 let completionError: string | null = null;
 let moveError: string | null = null;
 let moveCount = 0;
+let saveCount = 0;
 let undo: { events: CalendarEvent[]; layout: ReturnType<typeof emptyMonthLayout>; expected: string; expires: number } | null = null;
 let moveNotice: Notice | null = null;
 const plugin = {
@@ -17,7 +18,7 @@ const plugin = {
 	monthLayout: emptyMonthLayout(),
 	events: [event('tianjin', '天津 · 会议活动', '2026-11-06', '2026-11-09'), event('prep', '会前准备', '2026-11-07', '2026-11-08', 'purple'), event('month', '跨月出差', '2026-10-30', '2026-11-03', 'teal'), { ...event('single', '项目同步', '2026-11-06'), startTime: '10:00', endTime: '11:00' }],
 	onRefresh(callback: () => void) { callbacks.add(callback); return () => callbacks.delete(callback); },
-	async saveAll() { view.rerender(); for (const callback of callbacks) callback(); },
+	async saveAll() { saveCount++; view.rerender(); for (const callback of callbacks) callback(); },
 	async toggleEventCompleted(id: string) {
 		if (completionError) throw new Error(completionError);
 		this.events = this.events.map(event => event.id === id ? { ...event, completed: !event.completed } : event);
@@ -84,6 +85,8 @@ void createMyCalendarWidget(plugin as any).mount({
 	getMonthLayout() { return JSON.parse(JSON.stringify(plugin.monthLayout)); },
 	setMonthLayout(value: unknown) { plugin.monthLayout = normalizeMonthLayout(value, plugin.events); void plugin.saveAll(); },
 	getMoveCount() { return moveCount; },
+	getSaveCount() { return saveCount; },
+	async disposeCalendars() { await view.onClose(); for (const cleanup of cleanups.splice(0).reverse()) cleanup(); document.getElementById('widget')!.replaceChildren(); },
 	setMoveError(message: string | null) { moveError = message; },
 	undoMonthMove() { return plugin.undoMonthMove(); },
 	setCompletionError(message: string | null) { completionError = message; },
